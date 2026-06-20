@@ -1,0 +1,45 @@
+import { GenericContainer, type StartedTestContainer } from 'testcontainers';
+
+/**
+ * Spins up DB{{#REDIS}} + Redis{{/REDIS}} containers ONCE for the whole integration suite.
+ * In CI we skip Testcontainers and use GH Actions service containers — set
+ * `USE_GHA_SERVICES=1` to point at localhost ports the workflow exposes.
+ *
+ * Per-test isolation (fresh fixture / unique DB name) happens in setup.ts.
+ */
+
+const containers: StartedTestContainer[] = [];
+
+export async function setup(): Promise<void> {
+  if (process.env.USE_GHA_SERVICES === '1') {
+{{#MONGO}}    process.env.MONGODB_URI ??= 'mongodb://localhost:27017/test';
+{{/MONGO}}{{#POSTGRES}}    process.env.DATABASE_URL ??= 'postgresql://ci:ci@localhost:5432/ci_test';
+{{/POSTGRES}}{{#MYSQL}}    process.env.DATABASE_URL ??= 'mysql://dev:dev@localhost:3306/ci_test';
+{{/MYSQL}}{{#REDIS}}    process.env.REDIS_URL ??= 'redis://localhost:6379';
+{{/REDIS}}    return;
+  }
+
+{{#MONGO}}  const mongo = await new GenericContainer('mongo:7').withExposedPorts(27017).start();
+  containers.push(mongo);
+  process.env.MONGODB_URI = `mongodb://${mongo.getHost()}:${mongo.getMappedPort(27017).toString()}/test`;
+{{/MONGO}}{{#POSTGRES}}  const pg = await new GenericContainer('postgres:16-alpine')
+    .withEnvironment({ POSTGRES_USER: 'test', POSTGRES_PASSWORD: 'test', POSTGRES_DB: 'test' })
+    .withExposedPorts(5432)
+    .start();
+  containers.push(pg);
+  process.env.DATABASE_URL = `postgresql://test:test@${pg.getHost()}:${pg.getMappedPort(5432).toString()}/test`;
+{{/POSTGRES}}{{#MYSQL}}  const mysql = await new GenericContainer('mysql:8')
+    .withEnvironment({ MYSQL_ROOT_PASSWORD: 'test', MYSQL_DATABASE: 'test', MYSQL_USER: 'test', MYSQL_PASSWORD: 'test' })
+    .withExposedPorts(3306)
+    .start();
+  containers.push(mysql);
+  process.env.DATABASE_URL = `mysql://test:test@${mysql.getHost()}:${mysql.getMappedPort(3306).toString()}/test`;
+{{/MYSQL}}{{#REDIS}}
+  const redis = await new GenericContainer('redis:7-alpine').withExposedPorts(6379).start();
+  containers.push(redis);
+  process.env.REDIS_URL = `redis://${redis.getHost()}:${redis.getMappedPort(6379).toString()}`;
+{{/REDIS}}}
+
+export async function teardown(): Promise<void> {
+  await Promise.all(containers.map((c) => c.stop()));
+}

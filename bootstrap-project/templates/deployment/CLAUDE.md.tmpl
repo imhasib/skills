@@ -1,0 +1,153 @@
+# {{PROJECT}}-deployment — Infrastructure
+
+Docker Compose + nginx for {{PROJECT}}. Three environments live side-by-side: `prod/`, `staging/`, `dev/`, with shared nginx snippets under `shared/nginx/`.
+
+At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `prod/` folder is stamped with `<FILL_IN>` placeholders — populate them by running `/configure-prod` from the workspace root when you're ready to publish.
+
+## Layout
+
+```
+{{PROJECT}}-deployment/
+├── prod/                       # production stack — DEFERRED at bootstrap
+│   ├── docker-compose.yml
+│   ├── docker-compose.logging.yml
+│   ├── nginx/                  # prod CORS allowlist (<FILL_IN_PROD_DOMAIN>)
+│   ├── env/                    # prod env files (gitignored, populated by /configure-prod)
+│   └── .env                    # ports + grafana config (gitignored)
+├── staging/                    # staging stack — live at bootstrap
+│   ├── docker-compose.yml
+│   ├── nginx/                  # CORS for {{STAGING_DOMAIN}}
+│   ├── env/                    # staging env files (gitignored)
+│   └── REBUILD.md              # from-zero VM runbook
+├── dev/                        # local dev with bundled DB
+│   ├── docker-compose.yml
+│   ├── nginx/                  # CORS for localhost
+│   ├── env/                    # dev env files (gitignored)
+│   └── env.example             # committed schema — cp to env/{{PROJECT}}-core.env, env/user-service.env
+├── shared/
+│   └── nginx/                  # mounted by every env's compose
+│       ├── locations.conf      # routing rules (single source of truth)
+│       ├── cors.conf
+│       ├── proxy-params.conf
+│       └── proxy-params-minimal.conf
+├── grafana/, loki/, promtail/  # logging stack configs (referenced by prod/docker-compose.logging.yml)
+├── .gitignore                  # **/env/*.env, prod/.env
+└── .gitattributes              # LF on env files
+```
+
+## Environments at a glance
+
+| | dev | staging | prod |
+|---|---|---|---|
+| Host | local | {{#VPS}}`{{STAGING_SSH_HOST}}`{{/VPS}}{{#GCP}}`{{STAGING_VM_NAME}}` ({{GCP_ZONE}}){{/GCP}} | TODO (`/configure-prod`) |
+| External URL | `http://localhost:3030` | `https://{{STAGING_DOMAIN}}` | TODO |
+| Ingress | nginx (3030) → app | host Caddy → nginx (loopback 3030) → app | host Caddy → nginx → app |
+| Database | bundled `{{DB}}` container | hosted ({{DB_HOSTING}}) | hosted ({{DB_HOSTING}}, dedicated cluster recommended) |
+| Logging stack | not run | not run | run (`prod/docker-compose.logging.yml`) |
+| Auto-deploy | n/a | GHA on `dev` push | GHA on `main` push (when prod_ready) |
+
+## Routing (shared across all envs)
+
+Defined in `shared/nginx/locations.conf` (single source of truth). Header versioning via `{{API_VERSION_HEADER}}: {{API_VERSION_DEFAULT}}` — no URL versioning.
+
+```
+{{API_BASE}}/auth     →  user-service
+{{API_BASE}}/users    →  user-service
+{{API_BASE}}/email    →  user-service
+{{API_BASE}}/assets   →  user-service
+{{API_BASE}}/*        →  {{PROJECT}}-core   (catch-all)
+/api-docs/*           →  swagger-ui
+/health               →  200 OK
+```
+
+## Image registry
+
+Images are pulled from **{{IMAGE_REGISTRY}}** with prefix `{{IMAGE_PREFIX}}/`. Tags are passed inline at deploy time via env vars (`USER_SERVICE_TAG`, `CORE_TAG`, etc.) — format `sha-<short-git-sha>`.
+
+## External network
+
+`prod/` and `staging/` use the external bridge network `{{PROJECT}}-network` so the app stack and logging stack can co-exist from separate compose files. Create once per VM:
+
+```bash
+sudo docker network create {{PROJECT}}-network
+```
+
+`dev/` uses a self-contained `{{PROJECT}}-dev-network` — `docker compose up` works zero-setup.
+
+## Env files
+
+Stored per-env, **never committed** (matched by `**/env/*.env` in `.gitignore`).
+
+| Env | Files |
+|---|---|
+| dev | `dev/env/{{PROJECT}}-core.env`, `dev/env/user-service.env` — `cp dev/env.example` to start |
+| staging | `staging/env/{{PROJECT}}-core.env`, `staging/env/user-service.env` |
+| prod | `prod/env/{{PROJECT}}-core.env`, `prod/env/user-service.env`, `prod/.env` (ports + grafana) |
+
+LF line endings are mandatory on env files — `.gitattributes` enforces this.
+
+## Common commands
+
+```bash
+# dev — local, zero setup
+cd dev && docker compose up
+cd dev && docker compose --profile tools up   # + mongo-express on :8081 (if db=mongo)
+
+# staging — on the staging VM
+sudo docker compose -f staging/docker-compose.yml up -d
+sudo docker compose -f staging/docker-compose.yml logs -f
+
+# prod — DEFERRED at bootstrap; populate prod/ first via /configure-prod
+sudo docker compose -f prod/docker-compose.yml up -d
+sudo docker compose -f prod/docker-compose.yml \
+                    -f prod/docker-compose.logging.yml up -d
+```
+
+{{#VPS}}## Upload env files to staging VM
+
+```bash
+scp -i {{STAGING_SSH_KEY_PATH}} \
+  staging/env/{{PROJECT}}-core.env staging/env/user-service.env \
+  {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}:/opt/{{PROJECT}}-deployment/staging/env/
+```
+
+Then restart:
+```bash
+ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}} \
+  "cd /opt/{{PROJECT}}-deployment && sudo docker compose -f staging/docker-compose.yml up -d --force-recreate"
+```
+{{/VPS}}{{#GCP}}## Upload env files to staging VM (GCP IAP)
+
+```powershell
+gcloud compute scp --tunnel-through-iap --zone={{GCP_ZONE}} `
+  .\staging\env\{{PROJECT}}-core.env .\staging\env\user-service.env `
+  {{STAGING_VM_NAME}}:/opt/{{PROJECT}}-deployment/staging/env/
+```
+
+Then restart:
+```bash
+gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap \
+  --command="cd /opt/{{PROJECT}}-deployment && sudo docker compose -f staging/docker-compose.yml up -d --force-recreate"
+```
+{{/GCP}}
+
+## When to update this repo
+
+- Adding a new service to a stack
+- Changing port mappings
+- Modifying nginx routing rules (touch `shared/nginx/locations.conf` once — applies to all envs)
+- Updating CORS allowlist for one env (touch only that env's `nginx/nginx.conf`)
+- Resource limit changes
+- Env variable schema (coordinate with the consuming repo)
+
+Feature changes in `{{PROJECT}}-core` / `user-service` / `{{PROJECT}}-web*` do **not** require changes here — they ship via Docker images and the GHA deploy workflows handle the image bump.
+
+## Production setup
+
+Deferred at bootstrap. Run `/configure-prod` from the workspace root when ready to publish — that skill will:
+
+1. Ask for prod domain, prod SSH/VM details, prod DB connection strings
+2. Populate the `<FILL_IN_*>` placeholders across `prod/`
+3. Stamp `prod/REBUILD.md` (the from-zero prod runbook)
+4. Add `release.yml` GHA workflow for tag-based prod releases
+5. Wire prod secrets to the relevant code repos

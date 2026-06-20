@@ -1,0 +1,29 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_provider.dart';
+
+/// Minimal splash. The router-redirect resolves auth state in the background
+/// and pushes the user to `/login` or `/home` — usually within one frame.
+class SplashScreen extends ConsumerWidget {
+  const SplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the auth provider so the router-redirect re-runs when it resolves.
+    ref.watch(authProvider);
+
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(key: Key('splash_loader')),
+            SizedBox(height: 16),
+            Text('Loading…', key: Key('splash_status')),
+          ],
+        ),
+      ),
+    );
+  }
+}

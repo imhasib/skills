@@ -1,0 +1,85 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: choice
+        options: [staging{{#PROD_READY}}, production{{/PROD_READY}}]
+      image_tag:
+        description: "Image tag to deploy (e.g. sha-abc1234)"
+        required: true
+        default: dev
+
+concurrency:
+  # Single-tenant per env — never let two deploys race the same VM.
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+{{#VPS}}      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host *" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
+
+      - name: Deploy via SSH
+        env:
+          SSH_HOST: ${{ inputs.environment == 'production' && secrets.PROD_SSH_HOST || secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ inputs.environment == 'production' && secrets.PROD_SSH_USER || secrets.STAGING_SSH_USER }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "cd /opt/{{PROJECT}}-deployment && \
+             sudo -E CORE_TAG=$IMAGE_TAG \
+                  docker compose -f $DEPLOY_ENV/docker-compose.yml pull && \
+             sudo -E CORE_TAG=$IMAGE_TAG \
+                  docker compose -f $DEPLOY_ENV/docker-compose.yml up -d --remove-orphans"
+{{/VPS}}{{#GCP}}      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy via gcloud IAP SSH
+        env:
+          VM_NAME: ${{ inputs.environment == 'production' && secrets.PROD_VM_NAME || '{{STAGING_VM_NAME}}' }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          DEPLOY_ENV: ${{ inputs.environment }}
+        run: |
+          gcloud compute ssh "$VM_NAME" \
+            --zone={{GCP_ZONE}} \
+            --tunnel-through-iap \
+            --command="cd /opt/{{PROJECT}}-deployment && \
+                       sudo -E CORE_TAG=$IMAGE_TAG \
+                            docker compose -f $DEPLOY_ENV/docker-compose.yml pull && \
+                       sudo -E CORE_TAG=$IMAGE_TAG \
+                            docker compose -f $DEPLOY_ENV/docker-compose.yml up -d --remove-orphans"
+{{/GCP}}
+      - name: Smoke check
+        run: |
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            DOMAIN="${{ secrets.PROD_DOMAIN }}"
+          else
+            DOMAIN="{{STAGING_DOMAIN}}"
+          fi
+          for i in $(seq 1 30); do
+            if curl -fsS "https://$DOMAIN/health"; then
+              echo "Healthy"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Health check timed out"
+          exit 1

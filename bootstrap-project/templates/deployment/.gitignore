@@ -1,0 +1,9 @@
+# Env files — populated per-env, never committed.
+**/env/*.env
+prod/.env
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

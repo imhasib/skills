@@ -1,0 +1,124 @@
+# {{PROJECT}} — Workspace Guide for Claude
+
+This is the workspace root for **{{PROJECT}}** ({{PROJECT_DESCRIPTION}}). It contains independent sub-repos. The workspace root is **not** a git repo; each sub-repo is its own repo.
+
+## Repo map
+
+| Repo | Purpose | Stack |
+|---|---|---|
+| `{{PROJECT}}-core/` | Primary backend — REST API, business logic | {{BACKEND_RUNTIME}} + {{DB}}{{#CACHE}} + {{CACHE}}{{/CACHE}} |
+{{#MOBILE}}| `{{PROJECT}}-app/` | Mobile app | {{MOBILE}} |
+{{/MOBILE}}{{#WEB}}| `{{PROJECT}}-web/` | Public web app | {{WEB}} |
+{{/WEB}}{{#WEB_ADMIN}}| `{{PROJECT}}-web-admin/` | Admin console | Next.js |
+{{/WEB_ADMIN}}{{#E2E_GATE}}| `{{PROJECT}}-app-tests/` | Mobile E2E (Appium + WebdriverIO + Mocha) | Node + Appium |
+{{/E2E_GATE}}| `{{PROJECT}}-deployment/` | Docker Compose, nginx, env templates | Docker + nginx |
+
+Shared, **read-only** service this workspace depends on:
+
+- `{{USER_SERVICE_PATH}}` — `user-service` (image `{{USER_SERVICE_IMAGE}}`). Handles user management, email delivery, and asset/image hosting. Never edit from this workspace.
+
+## Planned future services
+
+These responsibilities live inside `user-service` today and will split into independent services later. Designs should keep these boundaries clean so the future split is mechanical:
+
+- `email-service` — transactional + marketing email
+- `asset-service` — user-uploaded images, public assets
+- `notification-service` — push, in-app, webhook fan-out
+
+When wiring new code, call these via a thin internal client, not by reaching into `user-service` internals.
+
+## Service topology
+
+```
+                          ┌──────────────┐
+            ┌────────────►│ user-service │
+            │             └──────────────┘
+            │
+client ──► nginx ──► {{PROJECT}}-core ──► {{DB}}{{#CACHE}}
+                          │              {{CACHE}}{{/CACHE}}
+                          └─► swagger-ui
+```
+
+- nginx routes (defined in `{{PROJECT}}-deployment/shared/nginx/locations.conf`, shared across all envs):
+  - `{{API_BASE}}/auth`, `{{API_BASE}}/users`, `{{API_BASE}}/email`, `{{API_BASE}}/assets` → `user-service`
+  - `{{API_BASE}}/*` (catch-all) → `{{PROJECT}}-core`
+  - `/api-docs/*` → `swagger-ui`
+- The `{{API_VERSION_HEADER}}` header is forwarded unchanged via `proxy_pass_header`.
+
+## API contract (summary)
+
+- Base path: `{{API_BASE}}` (no URL versioning)
+- Version header: `{{API_VERSION_HEADER}}: {{API_VERSION_DEFAULT}}` (required on every request to versioned routes)
+- Success body: the resource itself, no envelope. Lists: `{ "items": [...], "nextCursor": "...", "hasMore": true, "limit": 20 }`.
+- Error body (flat, no wrapper): `{ "code": "SCREAMING_SNAKE", "message": "...", "details"?: {...}, "requestId"?: "..." }`
+- HTTP status is the source of truth for success vs error. No `success` boolean in the body.
+- Auth: Bearer JWT from `user-service`. `{{PROJECT}}-core` only validates — never issues.
+
+Full contract: `docs/API_CONTRACT.md`. Coding conventions: `docs/CODING_PRACTICES.md`.
+
+## Infrastructure
+
+Three deployment environments live side-by-side in `{{PROJECT}}-deployment/`: `dev/`, `staging/`, `prod/`. See `{{PROJECT}}-deployment/CLAUDE.md` for the full layout.
+
+**At bootstrap time, only `dev/` and `staging/` are fully configured. `prod/` is stamped with `<FILL_IN>` placeholders — run `/configure-prod` from this directory when ready to publish.**
+
+- **Cloud provider**: {{CLOUD_PROVIDER}}
+- **Image registry**: {{IMAGE_REGISTRY}} (prefix `{{IMAGE_PREFIX}}/`)
+- **Staging domain**: `{{STAGING_DOMAIN}}` ({{STAGING_POLICY}})
+{{#VPS}}- **Staging VM**: `{{STAGING_SSH_HOST}}`
+- **Staging SSH**: `ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}`
+{{/VPS}}{{#GCP}}- **Staging VM**: `{{STAGING_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
+- **Staging SSH**: `gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
+{{/GCP}}- **Production**: TODO — `/configure-prod` populates prod domain, SSH, env, and stamps `prod/REBUILD.md`
+
+## Branch model
+
+`main ← dev ← <issue-id>_<snake_slug>`
+
+- PRs always target `dev`. Merge to `main` is manual, post-review.
+- Direct push to `main` is blocked by `.claude/hooks/block-main-pushes.ps1`.
+- Branch naming: `<issue-id>_<snake_slug>` (Mode A) or `<snake_slug>` (Mode B). Lowercase ASCII, `_`-joined, ≤5 words.{{#HOTFIX}}
+- Hotfix: `/hotfix <message>` pushes directly to `dev` after local gate. Logged to `HOTFIX_LOG.md`. **Never** touches `main`.{{/HOTFIX}}
+
+## Sub-agent delegation rules
+
+Each `*-specialist` agent is scoped to one repo and **must not** read or modify files outside its repo. Delegate via the `Agent` tool with the matching `subagent_type`:
+
+| Repo | Agent |
+|---|---|
+| `{{PROJECT}}-core/` | `backend-specialist` |
+{{#MOBILE}}| `{{PROJECT}}-app/` | `mobile-specialist` |
+{{/MOBILE}}{{#WEB}}| `{{PROJECT}}-web/` | `web-specialist` |
+{{/WEB}}{{#WEB_ADMIN}}| `{{PROJECT}}-web-admin/` | `web-admin-specialist` |
+{{/WEB_ADMIN}}| `{{PROJECT}}-deployment/` | `deployment-specialist` |
+{{#E2E_GATE}}| `{{PROJECT}}-app-tests/` | `test-specialist` |
+{{/E2E_GATE}}
+
+Order of operations when a change spans repos: contracts first (`backend-specialist`), then clients (`mobile-specialist` / `web-specialist`) in parallel. Tests after the contracts settle.
+
+## Workflow commands
+
+- `/run-issue <id-or-prompt>` — Phases 0–8 of `WORKFLOW.md`. Stops at draft PR.
+{{#E2E_GATE}}- `/run-e2e <id-or-branch>` — Appium loop. Marks PR ready-for-review on pass.
+- `/ship-issue <id-or-prompt>` — chains `/run-issue` then `/run-e2e`.
+{{/E2E_GATE}}{{#HOTFIX}}- `/hotfix <message>` — local gate → push to `dev`. Never `main`.
+{{/HOTFIX}}
+
+Full lifecycle: `WORKFLOW.md`.
+
+## Tracker
+
+Tracker for this workspace: **{{TRACKER}}**. See `WORKFLOW.md` for the substitution table (status moves, sub-issue linking, branch creation triggers).
+
+## Bootstrap record
+
+`BOOTSTRAP.json` records the choices made when this workspace was scaffolded (Q&A answers + `bootstrap-project` skill SHA). The future `/upgrade-project` skill reads this to know what was previously configured.
+
+## Hard rules
+
+- **Never** push to `main` from any sub-repo. The hook will block it.
+- **Never** edit `{{USER_SERVICE_PATH}}` from this workspace.
+- **Never** mock the DB in integration tests (see `docs/CODING_PRACTICES.md`).
+- **Never** target Flutter widgets by text in E2E specs — only by `Key()`.
+- **Never** invent a tracker ID — paste the real one or leave `TODO: fill in` and surface it to the user.
+- **Never** populate `prod/` `<FILL_IN_*>` placeholders by hand — run `/configure-prod` instead so the answers are recorded in `BOOTSTRAP.json` and other prod-conditional sections (workflows, CLAUDE.md) update consistently.

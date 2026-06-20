@@ -1,0 +1,50 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Placeholder login screen.
+///
+/// The real sign-in form lands via `/run-issue`.
+///
+/// To wire it up:
+///   1. Add `lib/features/login/data/login_repository.dart` that POSTs
+///      `{{API_BASE}}/auth/login` via `ref.read(apiClientProvider)`.
+///   2. Add a controller (`@riverpod` AsyncNotifier) that calls the
+///      repository and on success calls
+///      `ref.read(authProvider.notifier).signIn(...)`.
+///   3. Replace the body below with the form + submit button.
+///   4. Make sure every interactive widget has a `Key('login_<purpose>')`.
+class LoginScreen extends ConsumerWidget {
+  const LoginScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Login')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.lock_outline, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                'Login form lands via /run-issue.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                key: const Key('login_submit_button'),
+                onPressed: () {
+                  // TODO(login): wire to LoginController.signIn(...)
+                },
+                child: const Text('Sign in'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

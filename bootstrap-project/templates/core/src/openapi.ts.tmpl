@@ -1,0 +1,179 @@
+import swaggerJsdoc from 'swagger-jsdoc';
+import { config } from './config.js';
+
+/**
+ * Aggregates JSDoc-annotated routes into an OpenAPI 3 spec.
+ * Served at `/api-docs.json`; nginx proxies the swagger-ui container to render it.
+ *
+ * `servers[0]` is `{{API_BASE}}` so versioned operations declare paths relative
+ * to the API base (`/users`, `/orders`, ...). Health routes live at the server
+ * root and override `servers` at the path level to use `/`. Try-it-out builds
+ * the correct URL in both cases without double-prefixing.
+ *
+ * As new feature routers land, extend the `tags` array (one entry per domain)
+ * and the `schemas` block (one entry per wire-shape). The reusable parameters
+ * + responses below should cover most operations — only add new ones when a
+ * pattern repeats 3+ times.
+ */
+
+const objectIdExample = '6655d2c1f8e9c12345678901';
+
+export const openapiSpec = swaggerJsdoc({
+  definition: {
+    openapi: '3.0.3',
+    info: {
+      title: '{{PROJECT}}-core API',
+      version: config.api.versionDefault,
+      description: '{{PROJECT_DESCRIPTION}}',
+    },
+    servers: [{ url: '{{API_BASE}}', description: 'API base path' }],
+    tags: [
+      { name: 'Health', description: 'Liveness + readiness probes (no auth)' },
+      // Add one entry per domain (e.g. { name: 'Users', description: '...' }).
+      // Tag names must match the `tags: [Name]` on each operation, and the
+      // order here drives the order in Swagger UI.
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      },
+      parameters: {
+        ApiVersion: {
+          name: config.api.versionHeader,
+          in: 'header',
+          required: true,
+          schema: { type: 'string', default: config.api.versionDefault, example: config.api.versionDefault },
+          description: 'API contract version. Header-based versioning — no URL segment.',
+        },
+{{#IDEMPOTENCY_KEY}}        IdempotencyKey: {
+          name: 'Idempotency-Key',
+          in: 'header',
+          required: false,
+          schema: { type: 'string', maxLength: 200, example: '550e8400-e29b-41d4-a716-446655440000' },
+          description:
+            'Client-generated idempotency key (UUID recommended). Same key replayed within 24h ' +
+            'returns the original response. Different body for the same key → 409 IDEMPOTENCY_KEY_CONFLICT.',
+        },
+{{/IDEMPOTENCY_KEY}}        PathId: {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', example: objectIdExample },
+          description: 'Resource identifier.',
+        },
+        Cursor: {
+          name: 'cursor',
+          in: 'query',
+          required: false,
+          schema: { type: 'string', example: 'eyJpZCI6IjY2NTVkMmMxZjhlOWMxMjM0NTY3ODkwMSJ9' },
+          description: 'Opaque cursor from a previous `nextCursor`. Omit on the first page.',
+        },
+        Limit: {
+          name: 'limit',
+          in: 'query',
+          required: false,
+          schema: { type: 'integer', minimum: 1, maximum: 100, default: 20, example: 20 },
+          description: 'Page size. Server caps at 100.',
+        },
+        From: {
+          name: 'from',
+          in: 'query',
+          required: false,
+          schema: { type: 'string', format: 'date-time', example: '2026-01-01T00:00:00.000Z' },
+          description: 'Inclusive lower bound on the resource date field.',
+        },
+        To: {
+          name: 'to',
+          in: 'query',
+          required: false,
+          schema: { type: 'string', format: 'date-time', example: '2026-12-31T23:59:59.999Z' },
+          description: 'Inclusive upper bound on the resource date field.',
+        },
+      },
+      schemas: {
+        Error: {
+          type: 'object',
+          required: ['code', 'message'],
+          properties: {
+            code: {
+              type: 'string',
+              description: 'SCREAMING_SNAKE_CASE machine code, stable across versions.',
+              example: 'VALIDATION_FAILED',
+            },
+            message: {
+              type: 'string',
+              description: 'Human-readable, English. Not localised.',
+              example: 'Request body failed validation',
+            },
+            details: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Optional per-field or per-violation context.',
+              example: { fields: { 'body.email': 'must be a valid email' } },
+            },
+            requestId: {
+              type: 'string',
+              description: 'Server-assigned correlation id. Always present on 5xx, optional on 4xx.',
+              example: 'req_01H8R5K0XQ',
+            },
+          },
+        },
+        ObjectIdHex: {
+          type: 'string',
+          description: '24-char hex Mongo ObjectId.',
+          pattern: '^[a-f0-9]{24}$',
+          example: objectIdExample,
+        },
+        Money: {
+          type: 'string',
+          description:
+            'Decimal monetary amount serialized as a decimal string. Never JS Number — ' +
+            'parse with a Decimal library client-side.',
+          pattern: '^-?\\d+(\\.\\d+)?$',
+          example: '1250.00',
+        },
+        ListMeta: {
+          type: 'object',
+          required: ['nextCursor', 'hasMore', 'limit'],
+          properties: {
+            nextCursor: { type: 'string', nullable: true, example: 'eyJpZCI6Ii4uLiJ9' },
+            hasMore: { type: 'boolean', example: false },
+            limit: { type: 'integer', example: 20 },
+          },
+        },
+        // Add domain schemas here, e.g.:
+        //   User:          full wire shape returned to clients
+        //   UserCreate:    POST body shape (subset, required fields only)
+        //   UserPatch:     PATCH body shape (minProperties: 1)
+        //   UserListResponse: allOf [{ items: [User] }, ListMeta]
+      },
+      responses: {
+        BadRequest: {
+          description: 'Validation failed or a domain rule was violated.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+        Unauthorized: {
+          description: 'Missing, invalid, or expired Bearer token.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+        Forbidden: {
+          description: 'Authenticated, but role/membership does not allow this operation.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+        NotFound: {
+          description: 'Resource does not exist or is soft-deleted.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+        Conflict: {
+          description: 'A precondition or invariant (idempotency replay, status transition, etc.) failed.',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+        },
+        NoContent: {
+          description: 'Operation succeeded; response body is empty.',
+        },
+      },
+    },
+    security: [{ bearerAuth: [] }],
+  },
+  apis: ['./src/routes/**/*.ts', './src/modules/**/*.routes.ts'],
+});

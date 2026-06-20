@@ -1,0 +1,25 @@
+/// Canonical error codes. Mirrors `{{PROJECT}}-core/src/errors/codes.ts`.
+/// Keep in sync — any new server code that mobile cares about goes here too.
+class ApiErrorCodes {
+  ApiErrorCodes._();
+
+  // Auth
+  static const String authMissingToken = 'AUTH_MISSING_TOKEN';
+  static const String authTokenInvalid = 'AUTH_TOKEN_INVALID';
+  static const String authTokenExpired = 'AUTH_TOKEN_EXPIRED';
+  static const String authForbidden = 'AUTH_FORBIDDEN';
+
+  // Generic
+  static const String validationFailed = 'VALIDATION_FAILED';
+  static const String internalError = 'INTERNAL_ERROR';
+  static const String notFound = 'NOT_FOUND';
+  static const String conflict = 'CONFLICT';
+
+  // API contract
+  static const String missingApiVersion = 'MISSING_API_VERSION';
+  static const String unsupportedApiVersion = 'UNSUPPORTED_API_VERSION';
+
+  // Rate limiting / idempotency
+  static const String idempotencyKeyConflict = 'IDEMPOTENCY_KEY_CONFLICT';
+  static const String rateLimited = 'RATE_LIMITED';
+}

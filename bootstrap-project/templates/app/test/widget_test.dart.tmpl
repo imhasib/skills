@@ -1,0 +1,18 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:{{PROJECT_SNAKE}}/features/splash/splash_screen.dart';
+
+void main() {
+  testWidgets('Splash screen shows the loader', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: SplashScreen()),
+      ),
+    );
+
+    expect(find.byKey(const Key('splash_loader')), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+}

@@ -1,0 +1,14 @@
+services:
+  web-admin:
+    image: {{IMAGE_PREFIX}}/{{PROJECT}}-web-admin:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: {{PROJECT}}-web-admin-dev
+    ports:
+      - '3001:3000'
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+    restart: unless-stopped

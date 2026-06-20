@@ -1,0 +1,68 @@
+{
+  "name": "{{PROJECT}}-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "{{PROJECT_DESCRIPTION}} — backend",
+  "main": "dist/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">={{NODE_VERSION}}"
+  },
+  "packageManager": "npm@10",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:int": "vitest run --config vitest.integration.config.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.0",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "uuid": "^10.0.0"{{#MONGO}},
+    "mongodb": "^6.10.0"{{/MONGO}}{{#POSTGRES}},
+    "pg": "^8.13.0"{{/POSTGRES}}{{#MYSQL}},
+    "mysql2": "^3.11.0"{{/MYSQL}}{{#REDIS}},
+    "ioredis": "^5.4.0"{{/REDIS}}
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^{{NODE_VERSION}}.0.0",
+    "@types/supertest": "^6.0.2",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.6",{{#POSTGRES}}
+    "@types/pg": "^8.11.0",{{/POSTGRES}}
+    "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.3.0",
+    "supertest": "^7.0.0",
+    "testcontainers": "^10.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

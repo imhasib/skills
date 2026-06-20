@@ -1,0 +1,25 @@
+/**
+ * Canonical error-code constants mirroring the backend taxonomy.
+ *
+ * Source of truth: `{{PROJECT}}-core/src/errors/codes.ts`. Keep this list in sync
+ * when new codes are introduced.
+ */
+export const ApiErrorCodes = {
+  // Auth
+  AUTH_MISSING_TOKEN: 'AUTH_MISSING_TOKEN',
+  AUTH_TOKEN_INVALID: 'AUTH_TOKEN_INVALID',
+  AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
+  AUTH_FORBIDDEN: 'AUTH_FORBIDDEN',
+
+  // Generic
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  IDEMPOTENCY_KEY_CONFLICT: 'IDEMPOTENCY_KEY_CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  MISSING_API_VERSION: 'MISSING_API_VERSION',
+  UNSUPPORTED_API_VERSION: 'UNSUPPORTED_API_VERSION',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type ApiErrorCode = (typeof ApiErrorCodes)[keyof typeof ApiErrorCodes];

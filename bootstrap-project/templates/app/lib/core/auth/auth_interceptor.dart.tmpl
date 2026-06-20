@@ -1,0 +1,39 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_provider.dart';
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_storage.dart';
+
+/// Attaches `Authorization: Bearer <jwt>` to every outbound request when a
+/// JWT is present. On 401, clears the stored token and the auth state so the
+/// router-redirect bounces the user to the login screen.
+class AuthInterceptor extends Interceptor {
+  AuthInterceptor(this.ref);
+
+  final Ref ref;
+
+  @override
+  Future<void> onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    final jwt = await ref.read(authStorageProvider).readJwt();
+    if (jwt != null) {
+      options.headers['Authorization'] = 'Bearer $jwt';
+    }
+    handler.next(options);
+  }
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    if (err.response?.statusCode == 401) {
+      // Token rejected — clear and bounce to login via auth state.
+      await ref.read(authStorageProvider).clear();
+      await ref.read(authProvider.notifier).signOut();
+    }
+    handler.next(err);
+  }
+}

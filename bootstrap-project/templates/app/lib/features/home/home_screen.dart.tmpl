@@ -1,0 +1,35 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_provider.dart';
+
+/// Placeholder home screen. The real dashboard lands via `/run-issue`.
+class HomeScreen extends ConsumerWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('{{PROJECT}}', key: Key('home_title')),
+        actions: [
+          IconButton(
+            key: const Key('home_signout_button'),
+            icon: const Icon(Icons.logout),
+            onPressed: () => ref.read(authProvider.notifier).signOut(),
+          ),
+        ],
+      ),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Dashboard lands via /run-issue.',
+            textAlign: TextAlign.center,
+            key: Key('home_placeholder'),
+          ),
+        ),
+      ),
+    );
+  }
+}

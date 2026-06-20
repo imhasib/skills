@@ -1,0 +1,40 @@
+# {{PROJECT}}-web-admin
+
+Next.js admin console for {{PROJECT}}. Use this console for everything the mobile
+app intentionally leaves out: setup, member invitations, owner CRUD, and the
+audit log viewer.
+
+## Stack
+
+- Next.js 15 (App Router) + React 19
+- TypeScript strict
+- Tailwind CSS
+- TanStack Query for server state
+- React Hook Form + Zod for forms
+- NextAuth (Auth.js v5) — Google sign-in exchanged with `user-service`; the
+  resulting bearer is forwarded to backend calls. JWT validation lives in
+  `user-service` / `{{PROJECT}}-core`, **never** in this app.
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+The dev server listens on `http://localhost:3000` by default. When running
+through `docker-compose.dev.yml` it is published on `http://localhost:3001` to
+avoid colliding with the backend on `:3000`.
+
+## Scripts
+
+| Command            | What it does                          |
+| ------------------ | ------------------------------------- |
+| `npm run dev`      | Start the Next.js dev server          |
+| `npm run build`    | Production build (standalone output)  |
+| `npm run start`    | Run the production server             |
+| `npm run lint`     | ESLint via `next lint`                |
+| `npm run typecheck`| `tsc --noEmit`                        |
+| `npm test`         | Vitest (jsdom) one-shot               |
+| `npm run test:watch` | Vitest watch mode                   |

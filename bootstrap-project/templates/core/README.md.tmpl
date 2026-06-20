@@ -1,0 +1,122 @@
+# {{PROJECT}}-core
+
+Backend API for {{PROJECT}}. {{PROJECT_DESCRIPTION}}
+
+This service owns the product-specific domain. Auth, email, and asset endpoints live in the shared `user-service` (not in this repo).
+
+## Quick start
+
+```bash
+{{PACKAGE_MANAGER}} install
+cp .env.example .env
+{{PACKAGE_MANAGER}} run dev          # http://localhost:3000
+```
+
+Hot reload via `nodemon` + `tsx`. Source edits in `src/` restart the process.
+
+To run the full stack locally (with the user-service + nginx in front), use the deployment dev compose instead:
+
+```bash
+cd ../{{PROJECT}}-deployment/dev
+docker compose up
+```
+
+That stack serves http://localhost:3030 with nginx fronting both services.
+
+## Project structure
+
+```
+src/
+├── index.ts              # process entry — db.connect(), listen(), graceful shutdown
+├── app.ts                # express app construction (no listen) — also imported by integration tests
+├── config.ts             # env validation (Joi) + typed config export
+├── logger.ts             # pino, JSON-structured for Loki
+├── openapi.ts            # swagger-jsdoc aggregator
+├── db/                   # DB driver init + ping
+{{#REDIS}}├── cache/                # redis client init + ping
+{{/REDIS}}├── errors/
+│   ├── api-error.ts      # ApiError(code, message, statusCode, details?)
+│   └── codes.ts          # SCREAMING_SNAKE error-code taxonomy
+├── lib/
+│   ├── serialize.ts      # Mongo _id → id mapping
+│   └── ulid.ts           # newId(prefix) — time-sortable, prefixed
+├── middleware/
+│   ├── request-id.ts     # ULID per request, echoed in X-Request-Id
+│   ├── api-version.ts    # reads {{API_VERSION_HEADER}} header
+│   ├── jwt-verify.ts     # requireAuth + requireRole
+│   ├── validate.ts       # Joi schema runner
+│   ├── error-handler.ts  # converts thrown errors → flat error JSON
+│   └── not-found.ts      # 404 catch-all
+├── routes/
+│   ├── index.ts          # mounts feature routers
+│   └── health.ts         # /health (liveness) + /health/ready (DB ping)
+├── modules/              # feature modules go here (see "Adding a feature" below)
+└── types/
+    ├── express.d.ts      # augments Request with requestId, apiVersion, user
+    └── env.d.ts          # augments process.env
+```
+
+## Adding a feature
+
+Create `src/modules/<feature>/`:
+
+```
+<feature>.controller.ts   # HTTP handlers — throw ApiError, never raw try/catch
+<feature>.service.ts      # business logic — pure where possible
+<feature>.repository.ts   # DB access — the ONLY layer that touches the driver
+<feature>.routes.ts       # express Router with Swagger JSDoc
+<feature>.schema.ts       # Joi validation
+index.ts                  # public exports
+```
+
+Then mount it in `src/routes/index.ts`:
+
+```ts
+import { router as itemRouter } from '../modules/item/item.routes';
+apiRouter.use('/items', itemRouter);
+```
+
+Controllers throw `ApiError`; the error-handler middleware converts to the flat error JSON. Never write `try/catch` around the whole controller — only catch specific errors you can handle.
+
+## API contract (summary)
+
+- Base path: `{{API_BASE}}` (no URL versioning)
+- Required header: `{{API_VERSION_HEADER}}: {{API_VERSION_DEFAULT}}`
+- Success body: the resource directly (no envelope, no `data` wrapper)
+- List body: `{ items, nextCursor, hasMore, limit }`
+- Error body (flat): `{ code, message, details?, requestId? }`
+- HTTP status is the source of truth for success/failure
+
+Full contract: `../docs/API_CONTRACT.md`.
+
+## Commands
+
+```bash
+{{PACKAGE_MANAGER}} run dev          # hot-reload dev server
+{{PACKAGE_MANAGER}} run build        # tsc → dist/
+{{PACKAGE_MANAGER}} start            # run compiled dist
+{{PACKAGE_MANAGER}} run lint
+{{PACKAGE_MANAGER}} run typecheck
+{{PACKAGE_MANAGER}} test             # unit
+{{PACKAGE_MANAGER}} run test:int     # integration (Testcontainers spins real DB)
+{{PACKAGE_MANAGER}} run test:coverage
+```
+
+## Tests
+
+- **Unit** (`src/**/*.test.ts`, next to source) — mocked dependencies, no I/O
+- **Integration** (`src/**/__integration__/*.int.test.ts`) — real DB via Testcontainers locally, GH Actions service containers in CI. Never mock the DB here.
+
+Integration test helpers:
+- `__integration__/helpers/http.ts` — `api()` and `authedApi(role)` — pre-configured supertest agents
+- `__integration__/helpers/db.ts` — `resetDb()` runs in `beforeEach`
+- `__integration__/helpers/global-setup.ts` — boots the DB container once per suite
+
+## Hard rules
+
+- Never `console.log` — use the structured logger
+- Never touch the DB driver outside `repository.ts`
+- Never `throw new Error(...)` from a request path — use `ApiError`
+- Never serialize Mongo `_id` directly — call `toWire(doc)` first
+- Never let an `ApiError` leak with a 5xx that should be a 4xx — pick the right status
+- Never log secrets, JWTs, or full request bodies — pino redaction handles common cases; check on a new field

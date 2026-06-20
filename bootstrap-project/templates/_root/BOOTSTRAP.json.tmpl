@@ -1,0 +1,85 @@
+{
+  "project": "{{PROJECT}}",
+  "description": "{{PROJECT_DESCRIPTION}}",
+  "skill_version": {
+    "name": "bootstrap-project",
+    "commit": "{{SKILL_COMMIT_SHA}}",
+    "stamped_at": "{{STAMPED_AT_ISO}}"
+  },
+  "stack": {
+    "backend_runtime": "{{BACKEND_RUNTIME}}",
+    "mobile": "{{MOBILE}}",
+    "web": "{{WEB}}",
+    "web_admin": "{{WEB_ADMIN}}",
+    "db": "{{DB}}",
+    "cache": "{{CACHE}}",
+    "package_manager": "{{PACKAGE_MANAGER}}",
+    "node_version": "{{NODE_VERSION}}",
+    "flutter_version": "{{FLUTTER_VERSION}}"
+  },
+  "shared_services": {
+    "user_service": {
+      "path": "{{USER_SERVICE_PATH}}",
+      "image": "{{USER_SERVICE_IMAGE}}",
+      "covers": ["user-management", "email", "assets"]
+    },
+    "planned_future_services": ["email-service", "asset-service", "notification-service"]
+  },
+  "api": {
+    "base": "{{API_BASE}}",
+    "version_header": "{{API_VERSION_HEADER}}",
+    "version_default": "{{API_VERSION_DEFAULT}}",
+    "pagination": "{{PAGINATION}}",
+    "idempotency_key": {{IDEMPOTENCY_KEY}}
+  },
+  "tracker": {
+    "provider": "{{TRACKER}}",
+    "config": {{TRACKER_CONFIG_JSON}}
+  },
+  "git": {
+    "branch_model": "{{BRANCH_MODEL}}",
+    "hotfix_enabled": {{HOTFIX}}
+  },
+  "ops": {
+    "e2e_gate": {{E2E_GATE}},
+    "monitoring": "{{MONITORING}}",
+    "staging_policy": "{{STAGING_POLICY}}",
+    "iter_budget_run_issue": {{ITER_BUDGET_RUN_ISSUE}},
+    "iter_budget_run_e2e": {{ITER_BUDGET_RUN_E2E}},
+    "lint_strictness": "{{LINT_STRICTNESS}}",
+    "conventional_commits": {{CONVENTIONAL_COMMITS}}
+  },
+  "infra": {
+    "cloud_provider": "{{CLOUD_PROVIDER}}",
+    "image_registry": "{{IMAGE_REGISTRY}}",
+    "image_prefix": "{{IMAGE_PREFIX}}",
+    "staging": null,
+    "prod": null
+  },
+  "staging_ready": false,
+  "prod_ready": {{PROD_READY}},
+  "deferred": {
+    "staging_domain": null,
+    "staging_ssh_host": null,
+    "staging_ssh_user": null,
+    "staging_ssh_key_path": null,
+    "staging_vm_name": null,
+    "staging_gcp_project": null,
+    "staging_gcp_zone": null,
+    "staging_db_hosting": null,
+    "staging_db_uri": null,
+    "prod_domain": null,
+    "prod_ssh_host": null,
+    "prod_ssh_user": null,
+    "prod_ssh_key_path": null,
+    "prod_vm_name": null,
+    "prod_db_uri": null,
+    "prod_jwt_secrets": null,
+    "prod_oauth_credentials": null,
+    "prod_email_api_key": null,
+    "prod_asset_bucket": null,
+    "grafana_admin_password": null,
+    "notes": "Staging fields filled in by /configure-staging; prod fields by /configure-prod.",
+    "extra": {{DEFERRED_FIELDS_JSON}}
+  }
+}

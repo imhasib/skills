@@ -1,0 +1,61 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_interceptor.dart';
+import 'package:{{PROJECT_SNAKE}}/core/config/env.dart';
+import 'package:{{PROJECT_SNAKE}}/core/network/api_error.dart';
+
+/// Single Dio instance with auth + error interceptors wired.
+/// Use `ref.read(apiClientProvider)` from repositories — never construct Dio
+/// in feature code.
+///
+/// The base URL is `Env.apiBaseUrl + '{{API_BASE}}'` so callers can write
+/// relative paths like `/expenses` (becomes `<host>{{API_BASE}}/expenses`).
+final apiClientProvider = Provider<Dio>((ref) {
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: '${Env.apiBaseUrl}{{API_BASE}}',
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+      headers: {
+        '{{API_VERSION_HEADER}}': '{{API_VERSION_DEFAULT}}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ),
+  );
+
+  dio.interceptors.add(AuthInterceptor(ref));
+  dio.interceptors.add(_ApiErrorInterceptor());
+  // Debug-only HTTP log so the first end-to-end bring-up isn't blind. Logs
+  // request line + headers + body and response body via `debugPrint` (so the
+  // output participates in Flutter's stdout throttling and is stripped from
+  // release builds). Remove or downscope if a particular endpoint's body
+  // becomes too noisy.
+  if (kDebugMode) dio.interceptors.add(_devLogInterceptor());
+
+  return dio;
+});
+
+LogInterceptor _devLogInterceptor() => LogInterceptor(
+      requestBody: true,
+      responseHeader: false,
+      responseBody: true,
+      logPrint: (obj) => debugPrint(obj.toString()),
+    );
+
+/// Parses the backend's flat error body and re-throws as [ApiError].
+class _ApiErrorInterceptor extends Interceptor {
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    handler.reject(
+      DioException(
+        requestOptions: err.requestOptions,
+        response: err.response,
+        error: ApiError.fromDio(err),
+        type: err.type,
+      ),
+    );
+  }
+}

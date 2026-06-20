@@ -1,0 +1,48 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_provider.dart';
+import 'package:{{PROJECT_SNAKE}}/features/home/home_screen.dart';
+import 'package:{{PROJECT_SNAKE}}/features/login/login_screen.dart';
+import 'package:{{PROJECT_SNAKE}}/features/splash/splash_screen.dart';
+
+/// App router with auth-aware redirect. Unauthenticated users get bounced to
+/// `/login`; authenticated users land on `/home`. Splash holds while the auth
+/// provider is still resolving the stored token.
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/',
+    redirect: (context, state) {
+      final auth = ref.watch(authProvider);
+      final location = state.matchedLocation;
+
+      return auth.when(
+        loading: () => location == '/' ? null : '/',
+        error: (_, __) => '/login',
+        data: (s) => switch (s) {
+          Unauthenticated() => location == '/login' ? null : '/login',
+          AuthLoading() => location == '/' ? null : '/',
+          Authenticated() =>
+            location == '/login' || location == '/' ? '/home' : null,
+        },
+      );
+    },
+    routes: [
+      GoRoute(
+        path: '/',
+        name: 'splash',
+        builder: (_, __) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (_, __) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/home',
+        name: 'home',
+        builder: (_, __) => const HomeScreen(),
+      ),
+    ],
+  );
+});

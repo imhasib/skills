@@ -1,0 +1,30 @@
+FROM node:{{NODE_VERSION}}-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN {{PACKAGE_MANAGER}} ci
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN {{PACKAGE_MANAGER}} run build
+
+FROM node:{{NODE_VERSION}}-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY package*.json ./
+RUN {{PACKAGE_MANAGER}} ci --omit=dev --ignore-scripts && {{PACKAGE_MANAGER}} cache clean --force
+
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 3000
+
+# TCP-level listen check — proves the app booted past app.listen(). Endpoint-agnostic
+# so it survives route changes. Uses node so it works without curl/wget.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
+  CMD node -e "require('net').createConnection({host:'127.0.0.1',port:3000}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+
+CMD ["node", "dist/index.js"]

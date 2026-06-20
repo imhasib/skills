@@ -1,0 +1,93 @@
+import 'package:dio/dio.dart';
+import 'package:{{PROJECT_SNAKE}}/core/auth/auth_storage.dart';
+import 'package:{{PROJECT_SNAKE}}/core/network/api_client.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+part 'auth_provider.g.dart';
+
+/// App-wide auth state. Read by the router to gate routes; mutated by feature
+/// modules (login on success, sign-out anywhere).
+///
+/// `signIn(email, password)` is the integration point — the login feature
+/// module calls it after the user submits credentials.
+@Riverpod(keepAlive: true)
+class Auth extends _$Auth {
+  @override
+  Future<AuthState> build() async {
+    final storage = ref.watch(authStorageProvider);
+    final jwt = await storage.readJwt();
+    if (jwt == null) {
+      return const AuthState.unauthenticated();
+    }
+    return _resolveSession();
+  }
+
+  Future<void> signIn({
+    required String email,
+    required String password,
+  }) async {
+    state = const AsyncData(AuthState.loading());
+
+    final dio = ref.read(apiClientProvider);
+    try {
+      final res = await dio.post<Map<String, dynamic>>(
+        '/auth/login',
+        data: {'email': email, 'password': password},
+      );
+      final jwt = res.data?['token'] as String?;
+      if (jwt == null) {
+        state = const AsyncData(AuthState.unauthenticated());
+        return;
+      }
+      await ref.read(authStorageProvider).writeJwt(jwt);
+      state = AsyncData(await _resolveSession());
+    } on DioException {
+      state = const AsyncData(AuthState.unauthenticated());
+      rethrow;
+    }
+  }
+
+  Future<void> signOut() async {
+    await ref.read(authStorageProvider).clear();
+    state = const AsyncData(AuthState.unauthenticated());
+  }
+
+  /// Resolves the current user's session from `GET {{API_BASE}}/session`.
+  /// Falls back to unauthenticated on failure.
+  Future<AuthState> _resolveSession() async {
+    final dio = ref.read(apiClientProvider);
+    try {
+      final res = await dio.get<Map<String, dynamic>>('/session');
+      final data = res.data;
+      if (data == null) return const AuthState.unauthenticated();
+      return AuthState.authenticated(
+        userId: data['sub'] as String? ?? '',
+      );
+    } on DioException {
+      return const AuthState.unauthenticated();
+    }
+  }
+}
+
+/// Auth state as a (manually-coded) sealed class so callers can switch
+/// exhaustively. Promoted to `freezed` once the build runner runs.
+sealed class AuthState {
+  const AuthState();
+  const factory AuthState.unauthenticated() = Unauthenticated;
+  const factory AuthState.loading() = AuthLoading;
+  const factory AuthState.authenticated({required String userId}) = Authenticated;
+}
+
+class Unauthenticated extends AuthState {
+  const Unauthenticated();
+}
+
+class AuthLoading extends AuthState {
+  const AuthLoading();
+}
+
+class Authenticated extends AuthState {
+  const Authenticated({required this.userId});
+
+  final String userId;
+}

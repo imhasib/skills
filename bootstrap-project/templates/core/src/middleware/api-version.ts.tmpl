@@ -1,0 +1,42 @@
+import type { Request, Response, NextFunction } from 'express';
+import { ApiError } from '../errors/api-error.js';
+import { ErrorCodes } from '../errors/codes.js';
+import { config } from '../config.js';
+
+/**
+ * Read the API version header. In strict mode, reject requests missing it.
+ * Otherwise, fall back to the configured default. Echoes the resolved version
+ * back to the client in the same header.
+ */
+export function apiVersion(req: Request, res: Response, next: NextFunction): void {
+  const headerName = config.api.versionHeader;
+  const raw = req.header(headerName);
+
+  if (!raw) {
+    if (config.api.versionStrict) {
+      throw new ApiError(
+        ErrorCodes.MISSING_API_VERSION,
+        `${headerName} header is required`,
+        400,
+        { supportedVersions: [...config.api.supportedVersions] },
+      );
+    }
+    req.apiVersion = config.api.versionDefault;
+    res.setHeader(headerName, req.apiVersion);
+    next();
+    return;
+  }
+
+  if (!config.api.supportedVersions.includes(raw as '{{API_VERSION_DEFAULT}}')) {
+    throw new ApiError(
+      ErrorCodes.UNSUPPORTED_API_VERSION,
+      `API version "${raw}" is not supported`,
+      400,
+      { supportedVersions: [...config.api.supportedVersions] },
+    );
+  }
+
+  req.apiVersion = raw;
+  res.setHeader(headerName, raw);
+  next();
+}

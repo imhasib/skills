@@ -1,0 +1,15 @@
+FROM node:{{NODE_VERSION}}-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=development
+
+COPY package*.json ./
+RUN {{PACKAGE_MANAGER}} install
+
+COPY . .
+
+EXPOSE 3000
+
+# Source code is bind-mounted via docker-compose.dev.yml; tsx watch picks up edits.
+CMD ["{{PACKAGE_MANAGER}}", "run", "dev"]

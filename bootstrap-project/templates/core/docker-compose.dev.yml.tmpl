@@ -1,0 +1,91 @@
+name: {{PROJECT}}-core-dev
+
+services:
+  {{PROJECT}}-core:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: {{PROJECT}}-core-dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    # Override host-side `.env` defaults so service hostnames resolve on the
+    # compose network. `.env` keeps `localhost` so native `npm run dev` still
+    # works against host-mapped ports.
+    environment:
+{{#MONGO}}      MONGODB_URI: mongodb://mongo:27017/{{PROJECT}}
+{{/MONGO}}{{#POSTGRES}}      DATABASE_URL: postgresql://dev:dev@postgres:5432/{{PROJECT}}
+{{/POSTGRES}}{{#MYSQL}}      DATABASE_URL: mysql://dev:dev@mysql:3306/{{PROJECT}}
+{{/MYSQL}}{{#REDIS}}      REDIS_URL: redis://redis:6379
+{{/REDIS}}    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+    depends_on:
+      {{DB}}:
+        condition: service_healthy
+{{#CACHE}}      {{CACHE}}:
+        condition: service_healthy
+{{/CACHE}}    networks:
+      - {{PROJECT}}-dev-network
+
+{{#MONGO}}  mongo:
+    image: mongo:7
+    container_name: {{PROJECT}}-mongo-dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{PROJECT}}-dev-network
+{{/MONGO}}
+{{#POSTGRES}}  postgres:
+    image: postgres:16-alpine
+    container_name: {{PROJECT}}-postgres-dev
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: {{PROJECT}}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d {{PROJECT}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{PROJECT}}-dev-network
+{{/POSTGRES}}
+{{#REDIS}}  redis:
+    image: redis:7-alpine
+    container_name: {{PROJECT}}-redis-dev
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{PROJECT}}-dev-network
+{{/REDIS}}
+networks:
+  {{PROJECT}}-dev-network:
+    driver: bridge
+
+volumes:
+{{#MONGO}}  mongo-data:
+{{/MONGO}}{{#POSTGRES}}  postgres-data:
+{{/POSTGRES}}{{#REDIS}}  redis-data:
+{{/REDIS}}

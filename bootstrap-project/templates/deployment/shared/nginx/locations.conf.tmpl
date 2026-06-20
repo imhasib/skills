@@ -1,0 +1,96 @@
+# ===========================================
+# URL Mappings / Location Blocks
+# Shared across all envs — mounted from ../shared/nginx/locations.conf
+# Routing is header-versioned: clients send {{API_VERSION_HEADER}} on every request.
+# ===========================================
+
+# -------------------------------------------
+# Root — redirect to API docs
+# -------------------------------------------
+location = / {
+    return 302 $scheme://$http_host/api-docs;
+}
+
+# -------------------------------------------
+# Health Check
+# -------------------------------------------
+location = /health {
+    access_log off;
+    return 200 'OK';
+    add_header Content-Type text/plain;
+}
+
+# -------------------------------------------
+# User-service routes (user mgmt + email + assets, for now)
+# Add domain-specific user-service paths here as the service grows.
+#
+# user-service mounts its router at `{{API_BASE}}/v1` (it uses URL versioning,
+# unlike {{PROJECT}}-core which uses the `{{API_VERSION_HEADER}}` header).
+# Each `proxy_pass` carries an explicit `{{API_BASE}}/v1/<prefix>` URI so
+# nginx rewrites the location-matched portion — clients call the version-free
+# `{{API_BASE}}/<prefix>/...` and the `/v1` segment is added upstream.
+# -------------------------------------------
+location {{API_BASE}}/auth {
+    include /etc/nginx/cors.conf;
+    limit_req zone=auth_limit burst=10 nodelay;
+    proxy_pass http://user-service{{API_BASE}}/v1/auth;
+    include /etc/nginx/proxy-params.conf;
+}
+
+location {{API_BASE}}/users {
+    include /etc/nginx/cors.conf;
+    limit_req zone=api_limit burst=20 nodelay;
+    proxy_pass http://user-service{{API_BASE}}/v1/users;
+    include /etc/nginx/proxy-params.conf;
+}
+
+location {{API_BASE}}/email {
+    include /etc/nginx/cors.conf;
+    limit_req zone=api_limit burst=20 nodelay;
+    proxy_pass http://user-service{{API_BASE}}/v1/email;
+    include /etc/nginx/proxy-params.conf;
+}
+
+location {{API_BASE}}/assets {
+    include /etc/nginx/cors.conf;
+    limit_req zone=api_limit burst=20 nodelay;
+    proxy_pass http://user-service{{API_BASE}}/v1/assets;
+    include /etc/nginx/proxy-params.conf;
+}
+
+# -------------------------------------------
+# Swagger UI & API Documentation
+# -------------------------------------------
+location = /api-docs/specs/user-service.json {
+    proxy_pass http://user-service/api-docs.json;
+    include /etc/nginx/proxy-params-minimal.conf;
+}
+
+location = /api-docs/specs/{{PROJECT}}-core.json {
+    proxy_pass http://{{PROJECT}}-core/api-docs.json;
+    include /etc/nginx/proxy-params-minimal.conf;
+}
+
+location /api-docs {
+    proxy_pass http://swagger-ui;
+    include /etc/nginx/proxy-params-minimal.conf;
+}
+
+# -------------------------------------------
+# {{PROJECT}}-core API (catch-all for {{API_BASE}}/*)
+# -------------------------------------------
+location {{API_BASE}}/ {
+    include /etc/nginx/cors.conf;
+    limit_req zone=api_limit burst=20 nodelay;
+    proxy_pass http://{{PROJECT}}-core;
+    include /etc/nginx/proxy-params.conf;
+}
+
+# -------------------------------------------
+# Error Pages
+# -------------------------------------------
+error_page 502 503 504 /50x.html;
+location = /50x.html {
+    root /usr/share/nginx/html;
+    internal;
+}

@@ -1,0 +1,102 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to build"
+        required: true
+        default: dev
+  push:
+    branches: [dev{{#PROD_READY}}, main{{/PROD_READY}}]
+{{#PROD_READY}}    tags: ["v*"]
+{{/PROD_READY}}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Compute tag
+        id: tag
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "moving_tag=latest" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "moving_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "moving_tag=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+{{#REGISTRY_DOCKERHUB}}      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+{{/REGISTRY_DOCKERHUB}}{{#REGISTRY_GHCR}}      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+{{/REGISTRY_GHCR}}{{#REGISTRY_GCP_AR}}      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker {{GCP_AR_LOCATION}}-docker.pkg.dev --quiet
+
+{{/REGISTRY_GCP_AR}}      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            {{IMAGE_PREFIX}}/{{PROJECT}}-core:${{ steps.tag.outputs.tag }}
+            {{IMAGE_PREFIX}}/{{PROJECT}}-core:${{ steps.tag.outputs.moving_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  trigger-deploy:
+    # Auto-deploy to staging on `dev` push.{{#PROD_READY}} Prod deploys gate on tags only.{{/PROD_READY}}
+    if: github.ref_name == 'dev'{{#PROD_READY}} || github.ref_type == 'tag'{{/PROD_READY}}
+    needs: docker
+    runs-on: ubuntu-latest
+    # Soft-fail: deploy.yml must live on the default branch before GitHub
+    # registers it for workflow_dispatch, and the staging deploy itself no-ops
+    # until /configure-staging populates the <FILL_IN_*> placeholders. Treat
+    # dispatch errors as informational so build+push outcome owns the status.
+    continue-on-error: true
+    steps:
+      - name: Dispatch deploy
+        continue-on-error: true
+        run: |
+          ENV="staging"
+{{#PROD_READY}}          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            ENV="production"
+          fi
+{{/PROD_READY}}          if ! gh workflow run deploy.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field environment=$ENV \
+            --field image_tag=sha-$(git rev-parse --short HEAD); then
+            echo "::warning::Could not dispatch deploy.yml — expected until it's on the default branch and /configure-staging has populated the staging env."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

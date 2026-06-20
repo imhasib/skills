@@ -1,0 +1,194 @@
+services:
+{{#MONGO}}  mongo:
+    image: mongo:7
+    container_name: {{PROJECT}}-dev-mongo
+    restart: unless-stopped
+    # Single-node replica set so {{PROJECT}}-core can use multi-document
+    # transactions (the MongoDB driver refuses to start a transaction on a
+    # standalone). The MONGODB_URI in dev/env.example pins ?replicaSet=rs0.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    # Dev-only: publish on loopback so host tools (Compass, mongosh) can connect.
+    # Use `?directConnection=true` in the URI from the host — otherwise the
+    # driver discovers the rs primary as `mongo:27017` (the Docker DNS name
+    # the healthcheck initiates the set with) and hangs trying to resolve it.
+    ports: ["127.0.0.1:27017:27017"]
+    volumes:
+      - dev-mongo-data:/data/db
+    healthcheck:
+      # First boot: initiate the replica set with self as the only member.
+      # On subsequent boots rs.initiate errors with AlreadyInitialized, which
+      # the try/catch swallows; then we verify the primary is up via ping.
+      test: >
+        mongosh --quiet --eval "
+          try { rs.status() } catch(e) {
+            rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]})
+          }
+          db.adminCommand({ ping: 1 }).ok
+        "
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{/MONGO}}{{#POSTGRES}}  postgres:
+    image: postgres:16-alpine
+    container_name: {{PROJECT}}-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: {{PROJECT}}
+    volumes:
+      - dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d {{PROJECT}}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{/POSTGRES}}{{#MYSQL}}  mysql:
+    image: mysql:8
+    container_name: {{PROJECT}}-dev-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: dev
+      MYSQL_DATABASE: {{PROJECT}}
+      MYSQL_USER: dev
+      MYSQL_PASSWORD: dev
+    volumes:
+      - dev-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "dev", "-pdev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{/MYSQL}}{{#REDIS}}  redis:
+    image: redis:7-alpine
+    container_name: {{PROJECT}}-dev-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - dev-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{/REDIS}}  user-service:
+    image: {{IMAGE_PREFIX}}/user-service:${USER_SERVICE_TAG:-latest}
+    pull_policy: always
+    container_name: {{PROJECT}}-dev-user-service
+    restart: unless-stopped
+    env_file:
+      - ./env/user-service.env
+    depends_on:
+{{#MONGO}}      mongo:
+        condition: service_healthy
+{{/MONGO}}{{#POSTGRES}}      postgres:
+        condition: service_healthy
+{{/POSTGRES}}{{#MYSQL}}      mysql:
+        condition: service_healthy
+{{/MYSQL}}    healthcheck:
+      # user-service exposes GET /health (200 = ready). Gates {{PROJECT}}-core
+      # boot via condition: service_healthy so core never tries to validate JWTs
+      # against an upstream that's still starting.
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - {{PROJECT}}-dev-network
+
+  {{PROJECT}}-core:
+    image: {{IMAGE_PREFIX}}/{{PROJECT}}-core:${CORE_TAG:-dev}
+    pull_policy: always
+    container_name: {{PROJECT}}-dev-core
+    restart: unless-stopped
+    env_file:
+      - ./env/{{PROJECT}}-core.env
+    depends_on:
+{{#MONGO}}      mongo:
+        condition: service_healthy
+{{/MONGO}}{{#POSTGRES}}      postgres:
+        condition: service_healthy
+{{/POSTGRES}}{{#MYSQL}}      mysql:
+        condition: service_healthy
+{{/MYSQL}}{{#REDIS}}      redis:
+        condition: service_healthy
+{{/REDIS}}      user-service:
+        condition: service_healthy
+    networks:
+      - {{PROJECT}}-dev-network
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: {{PROJECT}}-dev-swagger-ui
+    restart: unless-stopped
+    environment:
+      # Multi-spec dropdown — nginx exposes /api-docs/specs/*.json which proxy
+      # to each upstream's /api-docs.json (see shared/nginx/locations.conf).
+      URLS: "${SWAGGER_URLS:-[{url: '/api-docs/specs/user-service.json', name: 'User Service'}, {url: '/api-docs/specs/{{PROJECT}}-core.json', name: '{{PROJECT}} Core'}]}"
+      BASE_URL: "${SWAGGER_BASE_URL:-/api-docs}"
+    networks:
+      - {{PROJECT}}-dev-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: {{PROJECT}}-dev-nginx
+    restart: unless-stopped
+    ports:
+      - "3030:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../shared/nginx/locations.conf:/etc/nginx/locations.conf:ro
+      - ../shared/nginx/proxy-params.conf:/etc/nginx/proxy-params.conf:ro
+      - ../shared/nginx/proxy-params-minimal.conf:/etc/nginx/proxy-params-minimal.conf:ro
+      - ../shared/nginx/cors.conf:/etc/nginx/cors.conf:ro
+    depends_on:
+      - user-service
+      - {{PROJECT}}-core
+      - swagger-ui
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{#MONGO}}  # Opt-in Mongo admin UI. Start with `docker compose --profile tools up`.
+  mongo-express:
+    image: mongo-express:latest
+    container_name: {{PROJECT}}-dev-mongo-express
+    restart: unless-stopped
+    profiles: ["tools"]
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - {{PROJECT}}-dev-network
+
+{{/MONGO}}volumes:
+{{#MONGO}}  dev-mongo-data:
+{{/MONGO}}{{#POSTGRES}}  dev-postgres-data:
+{{/POSTGRES}}{{#MYSQL}}  dev-mysql-data:
+{{/MYSQL}}{{#REDIS}}  dev-redis-data:
+{{/REDIS}}
+networks:
+  {{PROJECT}}-dev-network:
+    name: {{PROJECT}}-dev-network
+    driver: bridge

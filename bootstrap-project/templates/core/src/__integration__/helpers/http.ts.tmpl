@@ -1,0 +1,31 @@
+import supertest from 'supertest';
+import jwt from 'jsonwebtoken';
+import { createApp } from '../../app.js';
+import { config } from '../../config.js';
+import * as db from '../../db/index.js';
+{{#REDIS}}import * as cache from '../../cache/index.js';
+{{/REDIS}}
+/**
+ * Pre-built supertest agent against a real Express app (no HTTP listener).
+ * Auto-attaches the API-Version header so tests don't repeat it.
+ */
+const app = createApp({ db: db.db(){{#REDIS}}, cache: cache.cache{{/REDIS}} });
+
+export function api() {
+  return supertest(app).set('{{API_VERSION_HEADER}}', '{{API_VERSION_DEFAULT}}');
+}
+
+/** supertest agent with a signed Bearer token for the given user. */
+export function authedApi(opts: { userId?: string; role?: string } = {}) {
+  const token = jwt.sign(
+    { userId: opts.userId ?? 'u_test_user', role: opts.role ?? 'user' },
+    config.jwt.secret,
+    {
+      expiresIn: '15m',
+      algorithm: 'HS256',
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    },
+  );
+  return api().set('Authorization', `Bearer ${token}`);
+}

@@ -1,0 +1,37 @@
+{{#MONGO}}import { db } from '../../db/index.js';
+
+/** Drop all collections between tests. Faster than re-creating the DB. */
+export async function resetDb(): Promise<void> {
+  const collections = await db().collections();
+  await Promise.all(collections.map((c) => c.deleteMany({})));
+}
+{{/MONGO}}{{#POSTGRES}}import { db } from '../../db/index.js';
+
+/** Truncate all user tables between tests. Extend the IGNORE list for tables you want preserved. */
+const IGNORE = new Set(['schema_migrations', 'knex_migrations']);
+
+export async function resetDb(): Promise<void> {
+  const { rows } = await db.query<{ tablename: string }>(
+    "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
+  );
+  const tables = rows.map((r) => r.tablename).filter((t) => !IGNORE.has(t));
+  if (tables.length === 0) return;
+  await db.query(`TRUNCATE TABLE ${tables.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
+}
+{{/POSTGRES}}{{#MYSQL}}import { db } from '../../db/index.js';
+
+const IGNORE = new Set(['schema_migrations']);
+
+export async function resetDb(): Promise<void> {
+  const [rows] = await db.query<{ TABLE_NAME: string }[] & { length: number }>(
+    'SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE()',
+  );
+  const tables = (rows as unknown as { TABLE_NAME: string }[])
+    .map((r) => r.TABLE_NAME)
+    .filter((t) => !IGNORE.has(t));
+  if (tables.length === 0) return;
+  await db.query('SET FOREIGN_KEY_CHECKS = 0');
+  for (const t of tables) await db.query(`TRUNCATE TABLE \`${t}\``);
+  await db.query('SET FOREIGN_KEY_CHECKS = 1');
+}
+{{/MYSQL}}

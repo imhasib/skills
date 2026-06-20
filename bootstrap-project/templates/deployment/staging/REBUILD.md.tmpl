@@ -1,0 +1,122 @@
+# Staging VM Rebuild — {{PROJECT}}
+
+Full from-zero runbook to bring up the staging environment on a fresh VM.
+Run this once when provisioning a new staging server, and again if the VM is rebuilt.
+
+## Server
+
+{{#VPS}}- Host: `{{STAGING_SSH_HOST}}`
+- User: `{{STAGING_SSH_USER}}`
+- SSH: `ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}`
+{{/VPS}}{{#GCP}}- VM: `{{STAGING_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
+- SSH: `gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
+{{/GCP}}
+- Deploy dir on host: `/opt/{{PROJECT}}-deployment/` (clone this repo there)
+- External URL: `https://{{STAGING_DOMAIN}}`
+
+## Prerequisites on the VM
+
+```bash
+# Docker + Compose plugin
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER       # log out + back in for group change
+
+# Caddy for TLS termination
+sudo apt install -y caddy
+
+# Git
+sudo apt install -y git
+```
+
+## Steps
+
+### 1. Clone the deployment repo
+
+```bash
+sudo mkdir -p /opt/{{PROJECT}}-deployment
+sudo chown $USER:$USER /opt/{{PROJECT}}-deployment
+cd /opt
+git clone <your-repo-url> {{PROJECT}}-deployment
+cd {{PROJECT}}-deployment
+```
+
+### 2. Create the external network
+
+The app stack and (future) logging stack share this network from separate compose files.
+
+```bash
+sudo docker network create {{PROJECT}}-network
+```
+
+### 3. Upload env files from your workstation
+
+env files are gitignored; you upload them out-of-band.
+
+{{#VPS}}```bash
+scp -i {{STAGING_SSH_KEY_PATH}} \
+  staging/env/{{PROJECT}}-core.env staging/env/user-service.env \
+  {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}:/opt/{{PROJECT}}-deployment/staging/env/
+```
+{{/VPS}}{{#GCP}}```powershell
+gcloud compute scp --tunnel-through-iap --zone={{GCP_ZONE}} `
+  .\staging\env\{{PROJECT}}-core.env .\staging\env\user-service.env `
+  {{STAGING_VM_NAME}}:/opt/{{PROJECT}}-deployment/staging/env/
+```
+{{/GCP}}
+
+### 4. Configure host-level Caddy for TLS
+
+The internal nginx binds to `127.0.0.1:3030`. Caddy on the host terminates TLS and reverse-proxies.
+
+Edit `/etc/caddy/Caddyfile`:
+
+```
+{{STAGING_DOMAIN}} {
+    reverse_proxy 127.0.0.1:3030
+}
+{{#WEB_ADMIN}}
+admin-{{STAGING_DOMAIN}} {
+    reverse_proxy 127.0.0.1:3031
+}
+{{/WEB_ADMIN}}
+```
+
+Reload:
+```bash
+sudo systemctl reload caddy
+```
+
+### 5. Start the stack
+
+```bash
+sudo docker compose -f staging/docker-compose.yml up -d
+```
+
+Pull latest images and roll forward later with:
+```bash
+sudo docker compose -f staging/docker-compose.yml pull && \
+sudo docker compose -f staging/docker-compose.yml up -d
+```
+
+### 6. Smoke check
+
+```bash
+curl https://{{STAGING_DOMAIN}}/health   # should return 200 OK
+```
+
+## Auto-deploy via GitHub Actions
+
+After this is up, the workflow at `.github/workflows/deploy.yml` (in `{{PROJECT}}-core`) auto-deploys on every push to `dev`. Set these secrets per code repo:
+
+{{#VPS}}- `SSH_HOST` = `{{STAGING_SSH_HOST}}`
+- `SSH_USER` = `{{STAGING_SSH_USER}}`
+- `SSH_PRIVATE_KEY` = contents of `{{STAGING_SSH_KEY_PATH}}` (private half)
+- `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (if pushing to DockerHub)
+{{/VPS}}{{#GCP}}- `GCP_SA_KEY` = service-account JSON with Compute IAP Tunnel User + Artifact Registry Writer
+- `STAGING_VM_NAME` = `{{STAGING_VM_NAME}}`
+- `GCP_ZONE` = `{{GCP_ZONE}}`
+{{/GCP}}
+
+## Production rebuild
+
+Production setup is deferred at bootstrap. When ready to publish, run `/configure-prod` from the workspace root to fill in the `prod/` skeleton, then follow `prod/REBUILD.md` (created by that skill).

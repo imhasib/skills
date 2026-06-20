@@ -1,0 +1,19 @@
+# Hotfix Log — {{PROJECT}}
+
+Every invocation of `/hotfix` appends one row here. The hotfix command refuses to run if the previous entry has no resolution recorded for >24h (forces the human to close the loop).
+
+| Date (UTC) | Repo | Branch (from `dev`) | Author | Issue link | One-line cause | Verification | Follow-up PR |
+|---|---|---|---|---|---|---|---|
+| — | — | — | — | — | — | — | — |
+
+## How to read this
+
+- **Branch (from `dev`)**: the working branch the fix was committed on before the push to `dev`. Not a separate branch off `main`.
+- **Verification**: how the fix was checked post-push (smoke test on staging, prod log delta, etc.).
+- **Follow-up PR**: link to the PR that ports the same change through the normal `/run-issue` flow back into `dev`, so the audit trail isn't only here.
+
+## Rules
+
+- Hotfixes are for **production-impacting incidents only**. If the fix can wait for the next normal PR, it should.
+- Hotfixes push to `dev`, never `main`. Merge `dev` → `main` happens through the usual release path.
+- Every hotfix entry must reach a `Verification` value within 24 hours, or the hotfix command will refuse to run again until you fill it in.

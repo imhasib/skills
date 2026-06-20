@@ -1,0 +1,105 @@
+# {{PROJECT}}-app
+
+Mobile app for {{PROJECT}}. {{PROJECT_DESCRIPTION}}
+
+Flutter + Riverpod (code-gen) + go_router + Dio.
+
+## First-time setup
+
+```bash
+flutter pub get
+cp .env.example .env
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+```
+
+The `build_runner` step is **required** on every fresh clone — `*.g.dart`,
+`*.freezed.dart`, `*.mocks.dart`, and `*.config.dart` are gitignored. The app
+will not compile until they're generated.
+
+The Android emulator resolves `localhost` on the host as `10.0.2.2` — that's
+why `.env.example` points the API base at `http://10.0.2.2:3030`. iOS simulator
+uses `localhost` directly. Edit `.env` for a physical device (LAN IP).
+
+After every change to `.env` or any `@riverpod`/`@Envied`-annotated file,
+re-run the build runner.
+
+## Project structure
+
+```
+lib/
+├── main.dart                  # ProviderScope + app boot
+├── app.dart                   # MaterialApp.router
+├── core/
+│   ├── config/
+│   │   └── env.dart           # @Envied — compile-time env constants
+│   ├── network/
+│   │   ├── api_client.dart    # Dio + interceptors (Provider)
+│   │   ├── api_error.dart     # ApiError matching the backend's flat error shape
+│   │   └── error_codes.dart   # mirror of backend SCREAMING_SNAKE codes
+│   ├── auth/
+│   │   ├── auth_storage.dart  # FlutterSecureStorage wrapper
+│   │   ├── auth_interceptor.dart # Dio Bearer injector + 401 handler
+│   │   └── auth_provider.dart # AsyncNotifier — signIn / signOut
+│   ├── router/
+│   │   └── router.dart        # go_router with auth-aware redirect
+│   ├── theme/
+│   │   └── app_theme.dart
+│   └── widgets/
+│       └── error_view.dart    # reusable error display
+├── features/                  # one folder per feature — data/domain/presentation
+│   ├── splash/                # minimal — pinned while auth resolves
+│   ├── login/                 # placeholder — implement via /run-issue
+│   └── home/                  # placeholder — replace with real home
+└── ...
+```
+
+## Adding a feature
+
+```
+lib/features/<feature>/
+├── data/
+│   └── <feature>_repository.dart    # talks to Dio via ref.read(apiClientProvider)
+├── domain/
+│   └── <feature>.dart               # models, value objects (pure)
+└── presentation/
+    ├── <feature>_screen.dart        # ConsumerWidget
+    └── <feature>_controller.dart    # @riverpod AsyncNotifier
+```
+
+Then register the route in `lib/core/router/router.dart`.
+
+Every interactive widget needs a stable `Key('<feature>_<purpose>')` — the
+test-specialist's Appium specs target by `Key`, not by visible text. Adding
+a widget without a `Key` is a defect.
+
+## Commands
+
+```bash
+flutter pub get
+flutter run                              # debug
+flutter run --release                    # release
+flutter build apk --release              # release APK -> build/app/outputs/...
+flutter build appbundle --release        # AAB for Play
+flutter analyze
+flutter test
+dart run build_runner build --delete-conflicting-outputs   # regenerate .g.dart
+dart run build_runner watch                                 # watch mode
+```
+
+## Conventions
+
+- Riverpod with `@riverpod` annotations only — never raw `Provider(...)` / `StateNotifier(...)` for new code
+- `go_router` for navigation — never `Navigator.push` directly
+- API calls go through `lib/core/network/api_client.dart` — never construct Dio in feature code
+- Auth tokens via `AuthStorage` (FlutterSecureStorage) — never SharedPreferences for secrets
+- Every request carries `{{API_VERSION_HEADER}}: {{API_VERSION_DEFAULT}}` (set by the Dio base options — no per-call work)
+- Errors caught from the API are `ApiError` instances — switch on `code` (string from `ErrorCodes`), never on HTTP status
+
+## Hard rules
+
+- Never call `Navigator.push` — use `context.go(...)` / `context.push(...)` / `context.goNamed(...)`
+- Never hardcode an API URL or secret — env config only
+- Never bypass the auth interceptor — every authed request must carry the bearer token (or be on a route gated to signed-out)
+- Never target widgets by visible text in E2E specs — Keys only
+- Never put business logic in a Widget — it lives in `@riverpod` notifiers

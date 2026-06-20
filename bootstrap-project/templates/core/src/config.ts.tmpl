@@ -1,0 +1,79 @@
+import Joi from 'joi';
+
+const schema = Joi.object({
+  NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
+  PORT: Joi.number().default(3000),
+  LOG_LEVEL: Joi.string().valid('debug', 'info', 'warn', 'error').default('info'),
+
+{{#MONGO}}  MONGODB_URI: Joi.string().uri().required(),
+{{/MONGO}}{{#POSTGRES}}  DATABASE_URL: Joi.string().uri().required(),
+{{/POSTGRES}}{{#MYSQL}}  DATABASE_URL: Joi.string().uri().required(),
+{{/MYSQL}}{{#REDIS}}  REDIS_URL: Joi.string().uri().required(),
+{{/REDIS}}
+  JWT_ACCESS_SECRET: Joi.string().min(8).required(),
+  JWT_ISSUER: Joi.string().default('karigor'),
+  JWT_AUDIENCE: Joi.string().default('karigor-users'),
+
+  API_VERSION_STRICT: Joi.boolean().default(false),
+}).unknown(true);
+
+interface EnvShape {
+  NODE_ENV: 'development' | 'test' | 'production';
+  PORT: number;
+  LOG_LEVEL: string;
+{{#MONGO}}  MONGODB_URI: string;
+{{/MONGO}}{{#POSTGRES}}  DATABASE_URL: string;
+{{/POSTGRES}}{{#MYSQL}}  DATABASE_URL: string;
+{{/MYSQL}}{{#REDIS}}  REDIS_URL: string;
+{{/REDIS}}  JWT_ACCESS_SECRET: string;
+  JWT_ISSUER: string;
+  JWT_AUDIENCE: string;
+  API_VERSION_STRICT: boolean;
+}
+
+const result = schema.validate(process.env, { abortEarly: false }) as {
+  value: EnvShape;
+  error?: { details: { message: string }[] };
+};
+if (result.error) {
+  // Fail fast on misconfiguration — never boot with bad env
+  // eslint-disable-next-line no-console
+  console.error('FATAL: invalid environment configuration');
+  for (const detail of result.error.details) {
+    // eslint-disable-next-line no-console
+    console.error(`  - ${detail.message}`);
+  }
+  process.exit(1);
+}
+
+const env: EnvShape = result.value;
+
+export const config = {
+  nodeEnv: env.NODE_ENV,
+  isProd: env.NODE_ENV === 'production',
+  isTest: env.NODE_ENV === 'test',
+  port: env.PORT,
+  logLevel: env.LOG_LEVEL,
+
+  api: {
+    base: '{{API_BASE}}',
+    versionHeader: '{{API_VERSION_HEADER}}',
+    versionDefault: '{{API_VERSION_DEFAULT}}',
+    versionStrict: env.API_VERSION_STRICT,
+    supportedVersions: ['{{API_VERSION_DEFAULT}}'] as const,
+  },
+
+{{#MONGO}}  mongoUri: env.MONGODB_URI,
+  mongoDbName: '{{PROJECT}}',
+{{/MONGO}}{{#POSTGRES}}  databaseUrl: env.DATABASE_URL,
+{{/POSTGRES}}{{#MYSQL}}  databaseUrl: env.DATABASE_URL,
+{{/MYSQL}}{{#REDIS}}  redisUrl: env.REDIS_URL,
+{{/REDIS}}
+  jwt: {
+    secret: env.JWT_ACCESS_SECRET,
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+  },
+
+  service: '{{PROJECT}}-core',
+} as const;

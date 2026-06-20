@@ -1,0 +1,101 @@
+# Logging stack — Loki + Promtail + Grafana.
+# Runs alongside the app stack on the same external `{{PROJECT}}-network`.
+# Start with: docker compose -f prod/docker-compose.yml -f prod/docker-compose.logging.yml up -d
+
+services:
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: {{PROJECT}}-loki
+    restart: unless-stopped
+    # App services on this VM win under contention.
+    oom_score_adj: 500
+    cpu_shares: 256
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ../loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - {{PROJECT}}-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: {{PROJECT}}-promtail
+    restart: unless-stopped
+    oom_score_adj: 500
+    cpu_shares: 256
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ../promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/tmp
+    depends_on:
+      - loki
+    networks:
+      - {{PROJECT}}-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana-oss:11.4.0
+    container_name: {{PROJECT}}-grafana
+    restart: unless-stopped
+    oom_score_adj: 500
+    cpu_shares: 256
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    # Loopback only — host Caddy reverse-proxies the public hostname here.
+    ports:
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3050}:3000"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+    networks:
+      - {{PROJECT}}-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  loki-data:
+  grafana-data:
+  promtail-positions:
+
+networks:
+  {{PROJECT}}-network:
+    name: {{PROJECT}}-network
+    external: true

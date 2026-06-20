@@ -1,0 +1,51 @@
+import 'package:dio/dio.dart';
+import 'package:{{PROJECT_SNAKE}}/core/network/error_codes.dart';
+
+/// Mirrors the backend's flat error JSON:
+/// `{ code, message, details?, requestId? }`.
+/// Parsed by the API error interceptor and re-thrown as a Dart exception so
+/// callers can switch on `code` rather than HTTP status codes.
+class ApiError implements Exception {
+  const ApiError({
+    required this.code,
+    required this.message,
+    required this.statusCode,
+    this.details,
+    this.requestId,
+  });
+
+  /// Build an [ApiError] from a [DioException]. Parses the flat error body
+  /// shape when present; otherwise falls back to a generic `INTERNAL_ERROR`.
+  factory ApiError.fromDio(DioException e) {
+    final response = e.response;
+    final statusCode = response?.statusCode ?? 0;
+    final data = response?.data;
+
+    if (data is Map<String, dynamic> &&
+        data['code'] is String &&
+        data['message'] is String) {
+      return ApiError(
+        code: data['code'] as String,
+        message: data['message'] as String,
+        details: data['details'] as Map<String, dynamic>?,
+        requestId: data['requestId'] as String?,
+        statusCode: statusCode,
+      );
+    }
+
+    return ApiError(
+      code: ApiErrorCodes.internalError,
+      message: e.message ?? 'Unexpected error',
+      statusCode: statusCode,
+    );
+  }
+
+  final String code;
+  final String message;
+  final Map<String, dynamic>? details;
+  final String? requestId;
+  final int statusCode;
+
+  @override
+  String toString() => 'ApiError($code, $statusCode): $message';
+}

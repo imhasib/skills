@@ -1,0 +1,103 @@
+{{#MONGO}}import { MongoClient, type Db } from 'mongodb';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+
+let client: MongoClient | null = null;
+let database: Db | null = null;
+
+export async function connect(): Promise<void> {
+  client = new MongoClient(config.mongoUri, {
+    serverSelectionTimeoutMS: 5000,
+  });
+  await client.connect();
+  database = client.db(config.mongoDbName);
+  await database.command({ ping: 1 });
+  logger.info({ uri: redact(config.mongoUri), dbName: config.mongoDbName }, 'Connected to MongoDB');
+}
+
+export function db(): Db {
+  if (!database) {
+    throw new Error('MongoDB not connected — call connect() first');
+  }
+  return database;
+}
+
+export async function disconnect(): Promise<void> {
+  if (client) {
+    await client.close();
+    client = null;
+    database = null;
+  }
+}
+
+export async function ping(): Promise<boolean> {
+  if (!database) return false;
+  try {
+    const result = await database.command({ ping: 1 });
+    return Boolean(result.ok);
+  } catch {
+    return false;
+  }
+}
+{{/MONGO}}{{#POSTGRES}}import { Pool } from 'pg';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+
+export const db = new Pool({
+  connectionString: config.databaseUrl,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+});
+
+export async function connect(): Promise<void> {
+  await db.query('SELECT 1');
+  logger.info({ url: redact(config.databaseUrl) }, 'Connected to Postgres');
+}
+
+export async function disconnect(): Promise<void> {
+  await db.end();
+}
+
+export async function ping(): Promise<boolean> {
+  try {
+    await db.query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+{{/POSTGRES}}{{#MYSQL}}import mysql from 'mysql2/promise';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+
+export const db = mysql.createPool({
+  uri: config.databaseUrl,
+  connectionLimit: 10,
+});
+
+export async function connect(): Promise<void> {
+  const conn = await db.getConnection();
+  await conn.ping();
+  conn.release();
+  logger.info({ url: redact(config.databaseUrl) }, 'Connected to MySQL');
+}
+
+export async function disconnect(): Promise<void> {
+  await db.end();
+}
+
+export async function ping(): Promise<boolean> {
+  try {
+    const conn = await db.getConnection();
+    await conn.ping();
+    conn.release();
+    return true;
+  } catch {
+    return false;
+  }
+}
+{{/MYSQL}}
+
+function redact(uri: string): string {
+  return uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@');
+}

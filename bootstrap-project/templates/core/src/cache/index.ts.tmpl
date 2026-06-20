@@ -1,0 +1,27 @@
+{{#REDIS}}import { Redis } from 'ioredis';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+
+export const cache = new Redis(config.redisUrl, {
+  lazyConnect: true,
+  maxRetriesPerRequest: 3,
+});
+
+export async function connect(): Promise<void> {
+  await cache.connect();
+  logger.info('Connected to Redis');
+}
+
+export async function disconnect(): Promise<void> {
+  await cache.quit();
+}
+
+export async function ping(): Promise<boolean> {
+  try {
+    await cache.ping();
+    return true;
+  } catch {
+    return false;
+  }
+}
+{{/REDIS}}
