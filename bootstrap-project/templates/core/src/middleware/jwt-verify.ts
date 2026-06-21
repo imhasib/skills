@@ -60,11 +60,12 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     throw new ApiError(ErrorCodes.AUTH_TOKEN_INVALID, 'JWT missing role claim', 401);
   }
 
+  // exactOptionalPropertyTypes: only include email/name if defined, never as `undefined`.
   req.user = {
     userId: payload.userId,
     role: payload.role,
-    email: payload.email,
-    name: payload.name,
+    ...(payload.email !== undefined && { email: payload.email }),
+    ...(payload.name !== undefined && { name: payload.name }),
   };
   next();
 }

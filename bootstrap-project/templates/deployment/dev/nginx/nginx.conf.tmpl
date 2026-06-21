@@ -77,7 +77,7 @@ http {
         default "";
         "http://localhost:3000" $http_origin;  # web / web-admin local dev
         "http://localhost:3001" $http_origin;  # secondary local port
-        "http://localhost:3030" $http_origin;  # this nginx
+        "http://localhost:{{DEV_NGINX_PORT}}" $http_origin;  # this nginx
     }
 
     # ===========================================

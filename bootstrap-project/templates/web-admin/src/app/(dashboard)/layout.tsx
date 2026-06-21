@@ -14,17 +14,17 @@ interface SessionInfo {
 }
 
 async function loadFirmRole(): Promise<string | undefined> {
+  // Tolerant by design — the backend may not yet expose /session at bootstrap
+  // time. Until it ships, swallow every error (network, 404, malformed body)
+  // and render without a role badge rather than crashing the whole dashboard.
   try {
     const info = await serverApiFetch<SessionInfo>('/session');
     return info.firm_role;
   } catch (err) {
-    if (err instanceof ApiError) {
-      if (err.statusCode === 403 && err.code.startsWith('ADMIN_')) {
-        return 'ADMIN';
-      }
-      return undefined;
+    if (err instanceof ApiError && err.statusCode === 403 && err.code.startsWith('ADMIN_')) {
+      return 'ADMIN';
     }
-    throw err;
+    return undefined;
   }
 }
 

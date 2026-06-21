@@ -59,7 +59,7 @@ You are the Deployment specialist for {{PROJECT}}. You work exclusively inside `
 - Each env has its **own** `env/` folder. Per-service env files: `<env>/env/{{PROJECT}}-core.env`, `<env>/env/user-service.env`. All gitignored.
 - `dev/env.example` is the **combined schema** for both services. Devs `cp env.example env/{{PROJECT}}-core.env` then again for user-service.
 - Every service declares `deploy.resources.limits` — no unbounded containers.
-- Only `nginx` exposes a host port. Staging+prod nginx bind to `127.0.0.1:3030` (loopback) — host-level Caddy fronts TLS. Dev binds directly to `3030:80`.
+- Only `nginx` exposes a host port. Staging+prod nginx bind to `127.0.0.1:3030` (loopback) — host-level Caddy fronts TLS. Dev binds directly to `{{DEV_NGINX_PORT}}:80` (host port chosen at bootstrap; default `3030`).
 - Stateful dev containers have healthchecks; dependents use `condition: service_healthy`.
 - `logging: driver: json-file` with `max-size: 10m, max-file: 3` on every service.
 - `pull_policy: always` on app images so deploys grab the newest tag.

@@ -14,7 +14,7 @@ cp env.example env/user-service.env
 docker compose up
 ```
 
-Then hit `http://localhost:3030/health` to verify and `http://localhost:3030{{API_BASE}}/...` for any endpoint.
+Then hit `http://localhost:{{DEV_NGINX_PORT}}/health` to verify and `http://localhost:{{DEV_NGINX_PORT}}{{API_BASE}}/...` for any endpoint.
 
 {{#MONGO}}To also start the Mongo admin UI on `http://localhost:8081` (admin/admin):
 ```bash
@@ -39,7 +39,7 @@ sudo docker compose -f staging/docker-compose.yml up -d
 
 | | dev | staging | prod |
 |---|---|---|---|
-| URL | `http://localhost:3030` | `https://{{STAGING_DOMAIN}}` | TODO |
+| URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{STAGING_DOMAIN}}` | TODO |
 | Compose | `dev/docker-compose.yml` | `staging/docker-compose.yml` | `prod/docker-compose.yml` |
 | Auto-deploy | n/a | GHA on `dev` push | GHA on `main` push (when prod_ready) |
 | Database | bundled container | hosted | hosted (dedicated cluster) |

@@ -1,0 +1,15 @@
+import { auth } from '@/auth';
+
+export default async function DashboardPage() {
+  const session = await auth();
+  const name = session?.backendUser?.name ?? session?.user?.name ?? 'there';
+
+  return (
+    <section className="space-y-3">
+      <h1 className="text-2xl font-semibold tracking-tight">Hi, {name}! 👋</h1>
+      <p className="text-sm text-slate-600">
+        This is the placeholder {{PROJECT_TITLE}} dashboard. Feature surfaces will live here.
+      </p>
+    </section>
+  );
+}

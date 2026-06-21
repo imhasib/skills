@@ -1,0 +1,36 @@
+import Link from 'next/link';
+
+export default function HomePage() {
+  return (
+    <main className="flex min-h-screen flex-col bg-gradient-to-b from-slate-50 to-white">
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+        <span className="text-lg font-semibold tracking-tight text-slate-900">{{PROJECT_TITLE}}</span>
+        <Link
+          href="/login"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+        >
+          Sign in
+        </Link>
+      </header>
+
+      <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
+        <h1 className="text-5xl font-semibold tracking-tight text-slate-900 sm:text-6xl">
+          {{PROJECT_TITLE}}
+        </h1>
+        <p className="max-w-xl text-lg text-slate-600">
+          {{PROJECT_DESCRIPTION}}
+        </p>
+        <Link
+          href="/login"
+          className="rounded-md bg-slate-900 px-6 py-3 text-base font-medium text-white shadow-sm transition hover:bg-slate-700"
+        >
+          Sign in to get started
+        </Link>
+      </section>
+
+      <footer className="mx-auto w-full max-w-6xl px-6 py-6 text-center text-xs text-slate-500">
+        {{PROJECT_DESCRIPTION}}
+      </footer>
+    </main>
+  );
+}

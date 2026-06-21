@@ -44,7 +44,7 @@ Defines the service topology, repo split, shared-nginx routing, and shared-servi
 |---|---|---|
 | `{{PROJECT}}-core` | always | Backend API (the product-specific service) |
 | `{{PROJECT}}-app` | mobile ≠ none | Mobile client |
-| `{{PROJECT}}-web` | web ≠ none | Public web app |
+| `{{PROJECT}}-web` | web ≠ none | Public web app (Next.js 15 + React 19). Skeleton stamps a working login + auth-gated dashboard: NextAuth v5 with Google provider, server-side Google `id_token` exchange against user-service, public `/` landing + `/login` + `/dashboard` (auth-gated, no role check), Tailwind UI, TanStack Query providers, typed `apiFetch` + `serverApiFetch` (Bearer-injecting), `Dockerfile.dev` for hot-reload dev compose, multi-stage `Dockerfile` for standalone prod build. Dev server runs on `:3080` (mapped to container `:3000`). |
 | `{{PROJECT}}-web-admin` | web_admin = y | Admin portal |
 | `{{PROJECT}}-deployment` | always | Tri-env Docker Compose + shared nginx |
 | `{{PROJECT}}-app-tests` | e2e_gate = y AND mobile ≠ none | Appium E2E |

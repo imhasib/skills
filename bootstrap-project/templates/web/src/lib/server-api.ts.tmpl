@@ -1,0 +1,50 @@
+import 'server-only';
+
+import { auth } from '@/auth';
+
+import { ApiError } from './api-error';
+import { apiFetch, type ApiFetchOptions } from './api';
+
+// Single backend base URL — nginx fans out by path to user-service vs
+// {{PROJECT}}-core (see {{PROJECT}}-deployment/shared/nginx/locations.conf).
+const API_BASE_URL = process.env.{{PROJECT_UPPER}}_API_BASE_URL ?? 'http://localhost/api';
+
+export interface ServerApiFetchOptions extends Omit<ApiFetchOptions, 'jwt' | 'baseUrl'> {
+  /**
+   * Allow callers to opt out of throwing when there is no session. By default,
+   * `serverApiFetch` throws an `ApiError` with code `AUTH_TOKEN_INVALID` rather
+   * than silently calling the backend without a token.
+   */
+  allowAnonymous?: boolean;
+}
+
+/**
+ * Server-only fetch wrapper that auto-injects the backend JWT from the NextAuth
+ * session. Use this in server components and route handlers; never import from
+ * a client component (the `server-only` import will hard-fail at bundle time).
+ *
+ * The token is read from the session each call, so it is never exposed to the
+ * client. Sets `API-Version: v1` (via the
+ * shared `apiFetch`) and `Authorization: Bearer <token>`.
+ */
+export async function serverApiFetch<T>(
+  path: string,
+  opts: ServerApiFetchOptions = {},
+): Promise<T> {
+  const session = await auth();
+  const token = session?.backendToken;
+
+  if (!token && !opts.allowAnonymous) {
+    throw new ApiError(
+      'AUTH_TOKEN_INVALID',
+      'No active session — cannot call the backend.',
+      401,
+    );
+  }
+
+  return apiFetch<T>(path, {
+    ...opts,
+    baseUrl: API_BASE_URL,
+    jwt: token,
+  });
+}

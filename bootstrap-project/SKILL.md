@@ -120,6 +120,7 @@ Group questions logically and ask in batches of 3–5 per turn so the user isn't
 30. **DB hosting (staging)** — **deferred to `/configure-staging`**. Database name still defaults to `<project>` and is recorded in `BOOTSTRAP.json` now; the hosting choice (`atlas` / `self-hosted` / `managed-other`) and connection string come later, alongside the staging server.
     - The dev environment always uses a bundled DB container — independent of this answer.
     - Prod DB connection is asked separately by `/configure-prod` later.
+31. **Dev nginx gateway host port** — `[default: 3030]`. The TCP port the dev machine publishes the nginx gateway on; the in-container nginx always listens on `80`. Override when `3030` is already claimed by another project's dev stack on the same machine. Stamped into `dev/docker-compose.yml` (`<port>:80`), the dev `env.example` localhost URLs (`APP_BASE_URL`, `GOOGLE_CALLBACK_URL`), the dev nginx CORS allow-origin (so the browser accepts cross-origin from the same host:port), and the dev quick-start URLs in deployment + core READMEs. Staging and prod nginx loopback bindings are unrelated and remain `3030` (house style — Caddy proxies a known loopback port; prod also overrideable via `NGINX_PORT` env at deploy time).
 
 After Batch F, present a **summary table** of all captured answers and ask: *"Stamp the workspace with these settings? `[y]` to proceed, paste edits to revise."* Do not write files until ack.
 
@@ -206,7 +207,16 @@ Render and write files in this order (so later steps can reference earlier ones)
      - `lib/features/`: `splash/` (`SplashScreen` — loader while auth resolves), `login/` (placeholder — implement via `/run-issue`), `home/` (placeholder — sign-out wired)
      - `test/widget_test.dart` (smoke — splash renders)
      - Every interactive widget carries a `Key('<feature>_<purpose>')` per the test-specialist contract
-   - `<project>-web/` — Next.js skeleton (if web ≠ none) — **TODO: skeleton not yet stamped at bootstrap (only Dockerfile + package.json shells planned)**
+   - `<project>-web/` — Next.js 15 + React 19 public web skeleton (if web ≠ none). Stamps:
+     - Root: `package.json` (Next 15, `next-auth@5.0.0-beta.x`, `dev` script bound to `next dev -p 3080` so it never collides with `<project>-web-admin`'s `:3081`), `tsconfig.json` (strict + `noUncheckedIndexedAccess`), `next.config.mjs` (`typedRoutes` at top level), `tailwind.config.ts`, `postcss.config.mjs`, `eslint.config.mjs` (flat config, `FlatCompat` for `next/core-web-vitals`), `vitest.config.ts` (jsdom + `passWithNoTests`), `.env.example`, `.gitignore`, `next-env.d.ts`, `Dockerfile` (multi-stage standalone), `Dockerfile.dev`, `README.md`
+     - `src/auth.ts` — NextAuth v5 config with Google provider + `signIn` callback that POSTs the Google `id_token` to user-service (`POST /api/auth/google` → user-service `/api/v1/auth/google`), stashes `{ accessToken, user }` on the JWT, exposes them via `session.backendToken` / `session.backendUser`. JWT signature is **never** verified locally — that lives in user-service (issuer) and `<project>-core` (validator).
+     - `src/middleware.ts` — auth gate. Public: `/`, `/login`, `/api/auth/*`, Next internals. Protected: everything else (default redirect target is `/dashboard`). No role check — the public web is anonymous-friendly until a user opts to sign in.
+     - `src/app/`: `layout.tsx` (RSC root + Providers), `page.tsx` (anonymous landing with `/login` CTA), `login/page.tsx` + `login/login-form.tsx` (Google sign-in button with friendly error mapping), `dashboard/layout.tsx` (auth-gated shell with sign-out), `dashboard/page.tsx` (placeholder), `api/auth/[...nextauth]/route.ts` (handlers re-export), `globals.css` (Tailwind base)
+     - `src/components/`: `providers.tsx` (TanStack Query + Devtools), `sign-out-button.tsx`
+     - `src/lib/`: `cn.ts` + `cn.test.ts` (placeholder spec so `npm test` passes), `api.ts` (typed fetch with header versioning), `api-error.ts`, `api-error-codes.ts` (mirrors backend taxonomy), `server-api.ts` (server-only wrapper auto-injecting `session.backendToken` as Bearer)
+     - `src/types/next-auth.d.ts` (augments `Session` + `JWT` with `backendToken` / `backendUser`)
+     - `src/test-setup.ts` (`@testing-library/jest-dom/vitest`)
+     - Env shape: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`, `{{PROJECT_UPPER}}_API_BASE_URL` (defaults to `http://nginx/api` in docker-network dev so the in-cluster nginx fronts user-service + `<project>-core` from a single URL)
    - `<project>-web-admin/` — Next.js 15 + React 19 admin skeleton (if web-admin=y). Stamps:
      - Root: `package.json` (Next 15, jose for JWT, no `jsonwebtoken`), `tsconfig.json`, `next.config.mjs` (`typedRoutes` at top level), `tailwind.config.ts`, `postcss.config.mjs`, `eslint.config.mjs` (flat config, `FlatCompat` for `next/core-web-vitals` + `typescript-eslint` v8 umbrella), `vitest.config.ts` (`passWithNoTests`), `.prettierrc`, `.env.example`, `.gitignore`, `Dockerfile`, `Dockerfile.dev`, `docker-compose.dev.yml`, `README.md`
      - `src/lib/`: `cn.ts` + `cn.test.ts` (placeholder spec so `npm test` passes), `api.ts` (typed fetch with `{{API_BASE}}` + `{{API_VERSION_HEADER}}`), `api-error.ts`, `api-error-codes.ts`, `auth.ts` (`jose`-based JWT)
@@ -240,11 +250,13 @@ Every rendered file must have placeholders substituted:
 - `{{API_BASE}}` (default `/api`), `{{API_VERSION_HEADER}}` (default `API-Version`), `{{API_VERSION_DEFAULT}}` (default `v1`)
 - `{{TRACKER}}` and tracker-specific IDs
 - `{{NODE_VERSION}}`, `{{FLUTTER_VERSION}}`, `{{PACKAGE_MANAGER}}`
-- `{{PROJECT_CLASS}}` — PascalCase form of the project name, used in Dart class names (e.g. project `mesh-palok` → `Meshpalok`). Compute at orchestration time from `{{PROJECT}}`.
-- `{{PROJECT_SNAKE}}` — snake_case form of the project name, used as the Dart package name in `pubspec.yaml` and `package:<name>/...` imports (e.g. project `mesh-palok` → `meshpalok_app`). Convention: append `_app` for the mobile package.
-- `{{PROJECT_UPPER}}` — uppercase form of the project name with non-alphanumerics stripped, used as the prefix for project-scoped env var names (e.g. project `mesh-palok` → `MESHPALOK`, project `speaking_club` → `SPEAKINGCLUB`). Stamped into env vars like `{{PROJECT_UPPER}}_API_BASE_URL` so each generated workspace owns a namespaced shape that won't collide across projects on the same machine.
+- `{{PROJECT_CLASS}}` — PascalCase form of the project name, used in Dart class names (e.g. project `acme-shop` → `Acmeshop`). Compute at orchestration time from `{{PROJECT}}`.
+- `{{PROJECT_SNAKE}}` — snake_case form of the project name, used as the Dart package name in `pubspec.yaml` and `package:<name>/...` imports (e.g. project `acme-shop` → `acmeshop_app`). Convention: append `_app` for the mobile package.
+- `{{PROJECT_UPPER}}` — uppercase form of the project name with non-alphanumerics stripped, used as the prefix for project-scoped env var names (e.g. project `acme-shop` → `ACMESHOP`, project `acme_shop` → `ACMESHOP`). Stamped into env vars like `{{PROJECT_UPPER}}_API_BASE_URL` so each generated workspace owns a namespaced shape that won't collide across projects on the same machine.
+- `{{PROJECT_TITLE}}` — title-case form of `{{PROJECT}}` with hyphens replaced by spaces (e.g. `acme-shop` → `Acme Shop`). Used in brand text rendered to the browser — page metadata `title`, landing-page hero, login-page header, dashboard top-nav brand. Distinct from `{{PROJECT_CLASS}}` (Dart PascalCase, no spaces) because the web app surfaces this verbatim to humans.
 - `{{REVERSE_DNS}}` — reverse-DNS org prefix, used as the Android bundle prefix and `flutter create --org` argument (e.g. `org.karigor`). Combined with `{{PROJECT_SNAKE}}` to form the application id `{{REVERSE_DNS}}.{{PROJECT_SNAKE}}`.
 - `{{DB}}`, `{{CACHE}}`, `{{DB_HOSTING}}`
+- `{{DEV_NGINX_PORT}}` — host TCP port the dev nginx gateway publishes to (default `3030`). Recorded in `BOOTSTRAP.json` so `/upgrade-project` can re-stamp consistently.
 - `{{USER_SERVICE_PATH}}` → `E:\workspace-nodejs\user-service`
 - `{{USER_SERVICE_IMAGE}}` → `{{IMAGE_PREFIX}}/user-service`
 - `{{PROD_READY}}` → `false` at bootstrap (always)

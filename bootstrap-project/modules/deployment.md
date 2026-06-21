@@ -114,12 +114,101 @@ LF line endings are mandatory on env files (CRLF breaks `source` and embeds `\r`
 | `user-service` | ✓ | ✓ | ✓ |
 | `{{PROJECT}}-core` | ✓ | ✓ | ✓ |
 | `swagger-ui` | — (502 acceptable) | ✓ | ✓ |
-| `{{PROJECT}}-web-admin` | — | ✓ | ✓ |
-| `{{PROJECT}}-web` | — | — | ✓ |
-| `nginx` | ✓ (port 3030) | ✓ (loopback 3030) | ✓ (loopback 3030) |
+| `{{PROJECT}}-web-admin` | ✓ (port 3081, if `web_admin=y`) | ✓ | ✓ |
+| `{{PROJECT}}-web` | ✓ (port 3080, if `web ≠ none`) | ✓ | ✓ |
+| `nginx` | ✓ (port `{{DEV_NGINX_PORT}}`) | ✓ (loopback 3030) | ✓ (loopback 3030) |
 | bundled `{{DB}}` | ✓ | — (uses hosted DB) | — (uses hosted DB) |
 | `mongo-express` etc. | opt-in via `--profile tools` | — | — |
 | `grafana` + `loki` + `promtail` | — | — | ✓ (separate compose file) |
+
+## Web services in dev compose
+
+When `web ≠ none` and/or `web_admin = y`, `dev/docker-compose.yml` stamps the corresponding Next.js apps as first-class services so a single `docker compose up` brings up the whole stack. Working reference: `E:/org-karigor/toeic/toeic-deployment/dev/docker-compose.yml` (services `toeic-web-app` and `toeic-web-admin`).
+
+Stamp the following per opted-in web service:
+
+```yaml
+{{PROJECT}}-web-app:
+  build:
+    context: ../../{{PROJECT}}-web
+    dockerfile: Dockerfile.dev
+  image: {{IMAGE_PREFIX}}/{{PROJECT}}-web:dev-local
+  container_name: {{PROJECT}}-dev-web-app
+  restart: unless-stopped
+  env_file:
+    - ./env/web-app.env
+  ports:
+    - "3080:3000"
+  volumes:
+    - ../../{{PROJECT}}-web:/app
+    - /app/node_modules           # mask: keep container's node_modules
+    - /app/.next                  # mask: keep container's .next cache
+  depends_on:
+    user-service:
+      condition: service_healthy
+  networks:
+    - {{PROJECT}}-dev-network
+
+{{PROJECT}}-web-admin:
+  build:
+    context: ../../{{PROJECT}}-web-admin
+    dockerfile: Dockerfile.dev
+  image: {{IMAGE_PREFIX}}/{{PROJECT}}-web-admin:dev-local
+  container_name: {{PROJECT}}-dev-web-admin
+  restart: unless-stopped
+  env_file:
+    - ./env/web-admin.env
+  ports:
+    - "3081:3000"
+  volumes:
+    - ../../{{PROJECT}}-web-admin:/app
+    - /app/node_modules
+    - /app/.next
+  depends_on:
+    user-service:
+      condition: service_healthy
+  networks:
+    - {{PROJECT}}-dev-network
+```
+
+Notes:
+- **Port allocation**: `3080` for the public web app, `3081` for the admin. Both containers internally listen on `:3000` (Next.js default in `Dockerfile.dev`); the host port differentiates them. Same number as each app's local-machine `npm run dev` port so the docs stay consistent whether the dev runs through compose or natively.
+- **Bind-mount + anonymous volumes**: mounting `../../{{PROJECT}}-web:/app` gives hot-reload from the host source tree, and the two anonymous volumes (`/app/node_modules`, `/app/.next`) keep the container-owned `node_modules` (alpine `libc6-compat`-linked) and the build cache out of the host filesystem. Without these masks, the host's `node_modules` (often a Windows-installed copy) leaks into the container and breaks `next dev`.
+- **`depends_on: user-service.service_healthy`**: the web apps don't strictly need user-service up at boot (the Google exchange only runs on login), but waiting avoids the first sign-in racing user-service's cold start.
+
+## Per-service dev env files
+
+When `web ≠ none` and/or `web_admin = y`, also stamp under `dev/env/`:
+
+- `dev/env/web-app.env` (if `web ≠ none`)
+- `dev/env/web-admin.env` (if `web_admin = y`)
+
+Both files share the same shape (Google OAuth + NextAuth secret + backend URL). Stamp them with:
+
+```bash
+NEXT_PUBLIC_ENVIRONMENT=dev
+
+# Google OAuth — placeholders until real credentials are provisioned.
+# Authorized redirect URI to register in GCP Console:
+#   web-app:   http://localhost:3080/api/auth/callback/google
+#   web-admin: http://localhost:3081/api/auth/callback/google
+AUTH_GOOGLE_ID=<FILL_IN_GOOGLE_OAUTH_CLIENT_ID>
+AUTH_GOOGLE_SECRET=<FILL_IN_GOOGLE_OAUTH_CLIENT_SECRET>
+
+# NextAuth session-signing secret. Generate with: openssl rand -base64 32
+AUTH_SECRET=<FILL_IN_AUTH_SECRET>
+
+# Required when running NextAuth behind a proxy in dev.
+AUTH_TRUST_HOST=true
+
+# Backend URL — resolves to the in-cluster nginx (which fronts user-service +
+# {{PROJECT}}-core). Same URL for both web apps.
+{{PROJECT_UPPER}}_API_BASE_URL=http://nginx/api
+```
+
+Each app must get its own `AUTH_SECRET` value (cookies don't cross apps anyway, but separate secrets prevent accidental cross-sign-in if both apps are ever served from the same parent domain). At bootstrap, leave both as `<FILL_IN_AUTH_SECRET>` so the operator generates a fresh one per app.
+
+Both files are gitignored (`**/env/*.env`). Only `dev/env.example` is committed; document the shape there too so a new dev can `cp` the relevant pieces into `dev/env/web-app.env` and `dev/env/web-admin.env`.
 
 ## Per-cloud staging operations
 
@@ -159,7 +248,8 @@ The `deployment-specialist` agent's prompt instructs Claude **not to populate th
 
 - `<project>-deployment/{prod,staging,dev}/docker-compose.yml`
 - `<project>-deployment/{prod,staging,dev}/nginx/nginx.conf`
-- `<project>-deployment/dev/env.example` (committed)
+- `<project>-deployment/dev/env.example` (committed — combined schema covering `<project>-core`, `user-service`, and any opted-in web apps)
+- `<project>-deployment/dev/env/web-app.env` template (only if `web ≠ none`) and `dev/env/web-admin.env` template (only if `web_admin = y`) — both gitignored at install time; the example shape lives in `dev/env.example`
 - `<project>-deployment/{staging,prod}/env/.env.<service>.example` (committed templates)
 - `<project>-deployment/prod/.env.example` (committed template)
 - `<project>-deployment/prod/docker-compose.logging.yml`

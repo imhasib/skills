@@ -40,8 +40,8 @@ At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `pro
 | | dev | staging | prod |
 |---|---|---|---|
 | Host | local | {{#VPS}}`{{STAGING_SSH_HOST}}`{{/VPS}}{{#GCP}}`{{STAGING_VM_NAME}}` ({{GCP_ZONE}}){{/GCP}} | TODO (`/configure-prod`) |
-| External URL | `http://localhost:3030` | `https://{{STAGING_DOMAIN}}` | TODO |
-| Ingress | nginx (3030) → app | host Caddy → nginx (loopback 3030) → app | host Caddy → nginx → app |
+| External URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{STAGING_DOMAIN}}` | TODO |
+| Ingress | nginx ({{DEV_NGINX_PORT}}) → app | host Caddy → nginx (loopback 3030) → app | host Caddy → nginx → app |
 | Database | bundled `{{DB}}` container | hosted ({{DB_HOSTING}}) | hosted ({{DB_HOSTING}}, dedicated cluster recommended) |
 | Logging stack | not run | not run | run (`prod/docker-compose.logging.yml`) |
 | Auto-deploy | n/a | GHA on `dev` push | GHA on `main` push (when prod_ready) |

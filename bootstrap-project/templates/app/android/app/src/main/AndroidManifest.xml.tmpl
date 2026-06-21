@@ -14,10 +14,10 @@
              plain HTTP at a LAN IP (e.g. http://192.168.x.y:3030/api). Android 9+
              (API 28+) blocks cleartext to non-localhost by default, which makes
              every Dio request from a physical device silently hang until the
-             receiveTimeout fires — exactly the failure mode meshpalok hit on
-             first sign-in. Once the project moves entirely to HTTPS in staging
-             and prod, narrow this with a network_security_config.xml that
-             allow-lists only the dev LAN. -->
+             Dio receiveTimeout fires — no exception, no log, just a dead UI.
+             Once the project moves entirely to HTTPS in staging and prod,
+             narrow this with a network_security_config.xml that allow-lists
+             only the dev LAN. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
