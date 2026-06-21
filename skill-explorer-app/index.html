@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Skill Explorer · bootstrap-project</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <header>
+      <h1 id="skill-title">Skill</h1>
+      <p id="skill-meta"></p>
+      <input id="filter" type="search" placeholder="Filter files..." autocomplete="off" />
+    </header>
+    <nav id="tree"></nav>
+    <footer>
+      <span id="file-count"></span>
+      <button id="expand-all" title="Expand all folders">Expand</button>
+      <button id="collapse-all" title="Collapse all folders">Collapse</button>
+    </footer>
+  </aside>
+
+  <main id="content">
+    <div id="breadcrumb"></div>
+    <article id="rendered" class="markdown-body">
+      <h2>Pick a file on the left</h2>
+      <p>This explorer shows every markdown file inside the <code>bootstrap-project</code> skill in one place. Click any file to view it rendered.</p>
+      <p class="hint">Tip: run <code>node build.mjs</code> after editing the skill to refresh this view.</p>
+    </article>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
