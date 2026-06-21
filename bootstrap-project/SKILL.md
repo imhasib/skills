@@ -222,7 +222,7 @@ Render and write files in this order (so later steps can reference earlier ones)
      - `src/lib/`: `cn.ts` + `cn.test.ts` (placeholder spec so `npm test` passes), `api.ts` (typed fetch with `{{API_BASE}}` + `{{API_VERSION_HEADER}}`), `api-error.ts`, `api-error-codes.ts`, `auth.ts` (`jose`-based JWT)
      - `src/middleware.ts` (cookie-gated dashboard routes)
      - `src/components/providers.tsx` (TanStack Query)
-     - `src/app/`: `layout.tsx`, `globals.css`, `page.tsx` (landing), `login/page.tsx` (stub with `SyntheticEvent`), `(dashboard)/layout.tsx` + nested placeholder pages, `invite/[token]/` (stub flow)
+     - `src/app/`: `layout.tsx`, `globals.css`, `login/page.tsx` (Google sign-in form), `(dashboard)/layout.tsx` (auth gate) + `(dashboard)/page.tsx` (minimal landing — `"<name> logged in"` + sign-out button), `invite/[token]/` (stub flow). No top-nav, side-nav, or domain-specific subpages stamped — those land via `/run-issue` per product.
    - `<project>-app-tests/` — Appium skeleton (if E2E=y) — wdio.conf.js, page objects base, helpers, sample spec
 
 4. **Deployment** (`<project>-deployment/`) — **tri-env layout**:

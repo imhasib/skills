@@ -2,6 +2,28 @@
 
 All notable changes to the `bootstrap-project` skill.
 
+## [unreleased] — 2026-06-21
+
+### Changed (web-admin template — strip meshpalok-specific dashboard scaffold; ship a minimal generic landing)
+
+- **Replace the meshpalok-shaped admin shell with a minimal `"<name> logged in"` + sign-out scaffold.** The 2026-06-19 entry below ("admin authenticated-shell upgrade") landed a top-nav + side-nav + firm-overview + admin/animals/audit/batches/firm/members/profile pages copied verbatim from the live meshpalok admin. That entire kit is meshpalok-specific (firm/role concepts, `/session` fetch with `firm_id`/`firm_role`/`currency`, hard-coded nav for Firm/Members/Animals/Batches/Audit) and shipping it as the bootstrap baseline meant every new product started with another product's domain language stamped into its admin console — exactly the "copied a still-load-bearing reference" failure mode the meshpalok / `acme-shop` rename above tries to avoid, but worse because it's whole pages and a nav graph, not a one-line comment. New behaviour: the bootstrap stamps a single auth-gated dashboard page that reads the signed-in user's name off the session and renders `"<name> logged in"` with a sign-out button. Domain pages (firm, members, animals, profile, admin tools, etc.) land via `/run-issue` per product and start from a clean slate. Affected files:
+  - `templates/web-admin/src/app/(dashboard)/page.tsx` — **rewritten.** From the firm-overview + quick-link grid + admin banner + error block (165 lines) down to a 19-line auth-gated page rendering `<name> logged in` and `<SignOutButton />`. Reads the name from `session.backendUser?.name ?? session.user?.name ?? 'there'` (same convention as the prior layout's greeting fallback, so the auth/session-callback contract in `auth.ts.tmpl` and `next-auth.d.ts` stays untouched).
+  - `templates/web-admin/src/app/(dashboard)/layout.tsx` — **rewritten.** From the TopNav + SideNav shell with a `loadFirmRole()` `/session` fetch down to a thin auth-gate wrapper that redirects to `/login` when there's no session and passes children through. Middleware already gates the route — the page-level check stays as belt-and-suspenders, matching the rest of the template.
+  - `templates/web-admin/src/app/(dashboard)/admin/page.tsx` — **deleted.** System-admin landing stub; lands per-product via `/run-issue`.
+  - `templates/web-admin/src/app/(dashboard)/animals/page.tsx` — **deleted.** Meshpalok-specific.
+  - `templates/web-admin/src/app/(dashboard)/audit/page.tsx` — **deleted.** Meshpalok-specific (soft-delete audit viewer).
+  - `templates/web-admin/src/app/(dashboard)/batches/page.tsx` — **deleted.** Meshpalok-specific.
+  - `templates/web-admin/src/app/(dashboard)/firm/page.tsx` — **deleted.** Meshpalok-specific.
+  - `templates/web-admin/src/app/(dashboard)/members/page.tsx` — **deleted.** Member management lands per-product via `/run-issue`.
+  - `templates/web-admin/src/app/(dashboard)/profile/page.tsx` — **deleted.** Pulled `/users/me` from user-service and `/session` from `<project>-core` to render a firm-role badge — none of that is generic. Sign-out moves onto the dashboard itself, so the only thing the profile page was uniquely good for (a discoverable sign-out CTA) is no longer needed.
+  - `templates/web-admin/src/components/app-shell/side-nav.tsx` — **deleted.** Hard-coded nav for Dashboard/Firm/Members/Animals/Batches/Audit.
+  - `templates/web-admin/src/components/app-shell/top-nav.tsx.tmpl` — **deleted.** Profile dropdown with role-badge, sign-out, and profile link. Sign-out moves directly onto the dashboard page via the existing `SignOutButton` component.
+  - `templates/web-admin/src/components/app-shell/` (directory) — **removed** now that both files inside it are gone.
+  - `templates/web-admin/src/components/sign-out-button.tsx` — **kept unchanged.** Already generic (`signOut({ callbackUrl: '/login' })`); the new minimal dashboard imports it directly.
+  - `SKILL.md` — Phase 3 web-admin bullet (line 225) updated to describe the new layout: auth-gate `(dashboard)/layout.tsx` + minimal `(dashboard)/page.tsx` showing `"<name> logged in"` + sign-out, with an explicit "no top-nav, side-nav, or domain-specific subpages stamped — those land via `/run-issue` per product" so the next reader knows the absence is intentional.
+
+  Why: the prior scaffold optimised for "an authenticated user lands somewhere that looks like a working admin console" — a reasonable goal in isolation, but at the cost of stamping meshpalok's domain model into every future product's bootstrap. A new project for, say, a recipe app started with Firm/Members/Animals/Batches nav items the operator would have to delete by hand before adding their own. The minimal scaffold instead ships the smallest authenticated landing that proves the auth round-trip works (Google sign-in → user-service `id_token` exchange → backend JWT → session → page renders user's name) and leaves the dashboard's actual shape to the first feature issue, where the domain model is known.
+
 ## [unreleased] — 2026-06-20
 
 ### Changed (hygiene — strip prior-project names from stamped templates and author-facing examples)
