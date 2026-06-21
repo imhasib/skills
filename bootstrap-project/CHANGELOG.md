@@ -2,6 +2,15 @@
 
 All notable changes to the `bootstrap-project` skill.
 
+## [unreleased] — 2026-06-22
+
+### Fixed (web templates — first prod build now works out of the box)
+
+- **`templates/web/next.config.mjs`** — added `output: 'standalone'`. The web (public app) prod `Dockerfile.tmpl` copies `/app/.next/standalone` into the runner stage; without standalone output Next.js never emits that directory, so the build fails at the `COPY --from=builder /app/.next/standalone ./` step. The web-admin template already had this line — only the public web template was missing it (likely dropped when the file was derived from web-admin). Caught while running the toeic prod stack locally.
+- **`templates/web/public/.gitkeep`** and **`templates/web-admin/public/.gitkeep`** — added. Both web prod Dockerfiles `COPY /app/public ./public`, but neither template shipped a `public/` directory. Empty `public/` with a `.gitkeep` is the conventional Next.js layout and makes the COPY succeed for projects that haven't added any static assets yet.
+
+  Why: both bugs were silent at bootstrap (no template-stamping step exercises a prod build) and only fired on the first `docker compose -f prod/docker-compose.yml … up --build`. Every project bootstrapped from this skill before today would have hit both failures the moment someone tried to build the prod web image.
+
 ## [unreleased] — 2026-06-21
 
 ### Changed (web-admin template — strip meshpalok-specific dashboard scaffold; ship a minimal generic landing)
