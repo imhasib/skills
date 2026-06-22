@@ -8,6 +8,7 @@ interface LoginPageProps {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
+  const googleClientId = process.env.AUTH_GOOGLE_ID ?? '';
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-6 py-16">
       <header className="space-y-1">
@@ -17,7 +18,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
       </header>
       <Suspense>
-        <LoginForm error={params.error} nextPath={params.next} />
+        <LoginForm
+          error={params.error}
+          nextPath={params.next}
+          googleClientId={googleClientId}
+        />
       </Suspense>
     </main>
   );

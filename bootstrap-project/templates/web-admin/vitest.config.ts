@@ -14,4 +14,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Use the automatic JSX runtime so test files (and the components they
+  // render) don't need `import React` in scope. Mirrors Next.js's own
+  // SWC config so source files compile the same way under vitest.
+  esbuild: {
+    jsx: 'automatic',
+  },
 });

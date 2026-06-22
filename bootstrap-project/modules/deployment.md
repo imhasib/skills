@@ -183,17 +183,18 @@ When `web ≠ none` and/or `web_admin = y`, also stamp under `dev/env/`:
 - `dev/env/web-app.env` (if `web ≠ none`)
 - `dev/env/web-admin.env` (if `web_admin = y`)
 
-Both files share the same shape (Google OAuth + NextAuth secret + backend URL). Stamp them with:
+Both files share the same shape (Google client ID + NextAuth secret + backend URL). Stamp them with:
 
 ```bash
 NEXT_PUBLIC_ENVIRONMENT=dev
 
-# Google OAuth — placeholders until real credentials are provisioned.
-# Authorized redirect URI to register in GCP Console:
-#   web-app:   http://localhost:3080/api/auth/callback/google
-#   web-admin: http://localhost:3081/api/auth/callback/google
+# Google OAuth client ID — public by design. The browser uses it to talk to
+# Google Identity Services directly; the OAuth client *secret* lives only in
+# user-service (which validates the resulting id_token).
+# Authorized JavaScript origin to register in GCP Console:
+#   web-app:   http://localhost:3080
+#   web-admin: http://localhost:3081
 AUTH_GOOGLE_ID=<FILL_IN_GOOGLE_OAUTH_CLIENT_ID>
-AUTH_GOOGLE_SECRET=<FILL_IN_GOOGLE_OAUTH_CLIENT_SECRET>
 
 # NextAuth session-signing secret. Generate with: openssl rand -base64 32
 AUTH_SECRET=<FILL_IN_AUTH_SECRET>
@@ -207,6 +208,8 @@ AUTH_TRUST_HOST=true
 ```
 
 Each app must get its own `AUTH_SECRET` value (cookies don't cross apps anyway, but separate secrets prevent accidental cross-sign-in if both apps are ever served from the same parent domain). At bootstrap, leave both as `<FILL_IN_AUTH_SECRET>` so the operator generates a fresh one per app.
+
+The Google OAuth client *secret* (`GOOGLE_CLIENT_SECRET`) is held only by user-service in its own env file — never duplicated into the web apps. The web apps use Google Identity Services in the browser, which doesn't require a secret. The id_token they obtain is forwarded to user-service for validation.
 
 Both files are gitignored (`**/env/*.env`). Only `dev/env.example` is committed; document the shape there too so a new dev can `cp` the relevant pieces into `dev/env/web-app.env` and `dev/env/web-admin.env`.
 

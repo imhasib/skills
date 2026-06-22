@@ -1,15 +1,19 @@
-import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
+import NextAuth, { type User as NextAuthUser } from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 
 /**
  * Auth.js v5 configuration for the {{PROJECT}} web app.
  *
  * Flow:
- * 1. User clicks "Sign in with Google" → Google issues an `id_token`.
- * 2. We POST `{ idToken }` to user-service via nginx `POST /api/auth/google`
- *    (nginx rewrites to user-service's `/api/v1/auth/google` mount), which
- *    validates the Google token and returns `{ user, tokens }` with the
- *    backend-issued access token under `tokens.accessToken`.
+ * 1. The browser obtains a Google `id_token` directly via Google Identity
+ *    Services (`<GoogleSignInButton>`). No OAuth client secret is held by
+ *    this app — only the public client ID (`AUTH_GOOGLE_ID`).
+ * 2. The client POSTs the id_token through NextAuth's Credentials provider,
+ *    whose `authorize()` forwards it to user-service via
+ *    `POST /api/auth/google` (nginx rewrites to user-service's
+ *    `/api/v1/auth/google` mount), which validates the Google token and
+ *    returns `{ user, tokens }` with the backend-issued access token under
+ *    `tokens.accessToken`.
  * 3. The backend JWT (`backendToken`) is persisted on the NextAuth JWT and
  *    exposed via `session.backendToken`, so server components can forward it
  *    as a Bearer token to backend requests.
@@ -17,8 +21,7 @@ import Google from 'next-auth/providers/google';
  * The Next.js app never verifies the backend JWT signature locally — that
  * responsibility lives in {{PROJECT}}-core (validator) and user-service (issuer).
  *
- * AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, and AUTH_SECRET are injected by Auth.js
- * from the matching env vars.
+ * AUTH_SECRET is injected by Auth.js from the matching env var.
  */
 
 interface BackendUser {
@@ -28,15 +31,10 @@ interface BackendUser {
   avatar_url?: string;
 }
 
-interface UserServiceGoogleResponse {
-  token: string;
-  user: BackendUser;
-}
-
 /**
- * Wire format actually returned by user-service `POST /api/v1/auth/google`
- * (see `googleMobileAuth` controller). The body is `{ user, tokens }` with
- * the access token under `tokens.accessToken` and a sibling refresh token.
+ * Wire format returned by user-service `POST /api/v1/auth/google` (see
+ * `googleMobileAuth` controller). The body is `{ user, tokens }` with the
+ * access token under `tokens.accessToken` and a sibling refresh token.
  * We only consume the access token here — refresh is not yet wired.
  */
 interface UserServiceGoogleRawResponse {
@@ -52,7 +50,9 @@ interface UserServiceGoogleRawResponse {
 // stay base-relative (`/auth/google`, `/users/me`, ...).
 const API_BASE_URL = process.env.{{PROJECT_UPPER}}_API_BASE_URL ?? 'http://localhost/api';
 
-async function exchangeGoogleIdToken(idToken: string): Promise<UserServiceGoogleResponse> {
+async function exchangeGoogleIdToken(
+  idToken: string,
+): Promise<{ accessToken: string; user: BackendUser }> {
   const res = await fetch(`${API_BASE_URL}/auth/google`, {
     method: 'POST',
     headers: {
@@ -68,7 +68,7 @@ async function exchangeGoogleIdToken(idToken: string): Promise<UserServiceGoogle
   if (!res.ok) {
     let message = `user-service rejected Google sign-in (HTTP ${String(res.status)})`;
     try {
-      const body = (await res.json()) as { code?: unknown; message?: unknown };
+      const body = (await res.json()) as { message?: unknown };
       if (typeof body.message === 'string') {
         message = body.message;
       }
@@ -84,15 +84,48 @@ async function exchangeGoogleIdToken(idToken: string): Promise<UserServiceGoogle
   if (!accessToken || !user) {
     throw new Error('user-service returned an unexpected Google sign-in payload');
   }
-  return { token: accessToken, user };
+  return { accessToken, user };
+}
+
+interface AuthorizedUser extends NextAuthUser {
+  backendToken: string;
+  backendUser: BackendUser;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+    Credentials({
+      id: 'google',
+      name: 'Google',
+      credentials: {
+        idToken: { label: 'idToken', type: 'text' },
+      },
+      async authorize(credentials) {
+        const idToken = credentials?.idToken;
+        if (typeof idToken !== 'string' || idToken.length === 0) {
+          return null;
+        }
+        try {
+          const { accessToken, user } = await exchangeGoogleIdToken(idToken);
+          const authorized: AuthorizedUser = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.avatar_url,
+            backendToken: accessToken,
+            backendUser: user,
+          };
+          return authorized;
+        } catch (err) {
+          // Auth.js v5 surfaces a generic `CredentialsSignin` error to the
+          // client regardless of what we throw here, so log details
+          // server-side and return null. The login form shows a generic
+          // "sign-in failed" message; deeper diagnostics live in server logs.
+          console.error('Google sign-in via user-service failed:', err);
+          return null;
+        }
+      },
     }),
   ],
   pages: {
@@ -103,34 +136,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: 'jwt',
   },
   callbacks: {
-    async signIn({ account }) {
-      if (account?.provider !== 'google') {
-        return false;
-      }
-      const idToken = account.id_token;
-      if (typeof idToken !== 'string' || idToken.length === 0) {
-        return '/login?error=GoogleNoIdToken';
-      }
-
-      try {
-        const exchanged = await exchangeGoogleIdToken(idToken);
-        // Stash the result on the account so it survives into the jwt callback.
-        // Auth.js does not pass arbitrary fields through directly.
-        (account as unknown as { backend?: UserServiceGoogleResponse }).backend = exchanged;
-        return true;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'GoogleExchangeFailed';
-        // Returning a string redirects to that URL; encode the message so the
-        // login page can render a friendly error banner.
-        return `/login?error=${encodeURIComponent(message)}`;
-      }
-    },
-    jwt({ token, account }) {
-      const stashed = (account as unknown as { backend?: UserServiceGoogleResponse } | null)
-        ?.backend;
-      if (stashed) {
-        token.backendToken = stashed.token;
-        token.backendUser = stashed.user;
+    jwt({ token, user }) {
+      if (user) {
+        const authorized = user as AuthorizedUser;
+        token.backendToken = authorized.backendToken;
+        token.backendUser = authorized.backendUser;
       }
       return token;
     },
