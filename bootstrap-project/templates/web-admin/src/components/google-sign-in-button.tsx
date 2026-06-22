@@ -85,7 +85,7 @@ export function GoogleSignInButton({
 
   useEffect(() => {
     if (!scriptReady || initialized.current || !clientId) return;
-    if (!window.google?.accounts?.id) return;
+    if (!window.google?.accounts.id) return;
     window.google.accounts.id.initialize({
       client_id: clientId,
       callback: (res) => {
@@ -101,7 +101,7 @@ export function GoogleSignInButton({
   }, [scriptReady, clientId, handleCredential, onError]);
 
   function handleClick() {
-    if (!initialized.current || !window.google?.accounts?.id) {
+    if (!initialized.current || !window.google?.accounts.id) {
       onError?.('Google sign-in is still loading. Please try again.');
       return;
     }
@@ -124,12 +124,14 @@ export function GoogleSignInButton({
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
-        onReady={() => setScriptReady(true)}
+        onReady={() => {
+          setScriptReady(true);
+        }}
       />
       <button
         type="button"
         onClick={handleClick}
-        disabled={disabled || pending || !scriptReady || !clientId}
+        disabled={(disabled ?? false) || pending || !scriptReady || !clientId}
         className={className ?? DEFAULT_CLASSES}
       >
         <GoogleMark aria-hidden />

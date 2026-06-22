@@ -102,7 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         idToken: { label: 'idToken', type: 'text' },
       },
       async authorize(credentials) {
-        const idToken = credentials?.idToken;
+        const idToken = credentials.idToken;
         if (typeof idToken !== 'string' || idToken.length === 0) {
           return null;
         }
@@ -136,8 +136,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     jwt({ token, user }) {
-      if (user) {
-        const authorized = user as AuthorizedUser;
+      // Auth.js v5 types `user` as non-nullable, but at runtime it's only
+      // passed on initial sign-in (undefined on subsequent JWT refreshes).
+      // Cast through `| undefined` so the check reflects real behavior.
+      const authorized = user as AuthorizedUser | undefined;
+      if (authorized) {
         token.backendToken = authorized.backendToken;
         token.backendUser = authorized.backendUser;
       }

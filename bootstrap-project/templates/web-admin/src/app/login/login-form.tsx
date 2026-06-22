@@ -35,8 +35,8 @@ export function LoginForm({ error: initialError, nextPath, googleClientId }: Log
   async function handleIdToken(idToken: string) {
     setError(undefined);
     const result = await signIn('google', { idToken, redirect: false });
-    if (!result || result.error) {
-      setError(result?.error ?? 'CredentialsSignin');
+    if (result.error) {
+      setError(result.error);
       return;
     }
     // Full-page navigation guarantees server components re-render with the
