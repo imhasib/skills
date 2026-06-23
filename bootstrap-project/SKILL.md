@@ -235,9 +235,9 @@ Render and write files in this order (so later steps can reference earlier ones)
    - `CLAUDE.md`, `README.md` — repo-level docs covering the tri-env layout and per-cloud staging access
 
 5. **CI** (`.github/workflows/` per code repo)
-   - `ci.yml`, `build.yml` — per `cicd.md`. `build.yml` pushes to the chosen `IMAGE_REGISTRY` with the chosen `IMAGE_PREFIX`.
+   - `ci.yml`, `build.yml` — per `cicd.md`. `build.yml` pushes to the chosen `IMAGE_REGISTRY` with the chosen `IMAGE_PREFIX`. At bootstrap, push to `dev` builds + deploys to staging (moving tag `dev`); push to `main` builds + publishes the moving tag `latest` but **does not** deploy. Feature branches don't trigger build.
    - `deploy.yml` is stamped with the SSH/IAP scaffold but its `with:` block contains `<FILL_IN_*>` placeholders (host, user, VM name, etc.). It runs no-op until `/configure-staging` populates it.
-   - `main`/tag triggers + `release.yml` are NOT stamped at bootstrap — `/configure-prod` adds them.
+   - Tag triggers + `release.yml` are NOT stamped at bootstrap — `/configure-prod` adds them.
    - Deploy auth shapes: VPS → `ssh -i` with `SSH_PRIVATE_KEY` secret; GCP → `gcloud --tunnel-through-iap` with `GCP_SA_KEY` (secrets created later when staging is configured).
    - `block-main-pushes.ps1` reminder in PR template
 

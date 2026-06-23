@@ -44,7 +44,7 @@ At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `pro
 | Ingress | nginx ({{DEV_NGINX_PORT}}) → app | host Caddy → nginx (loopback 3030) → app | host Caddy → nginx → app |
 | Database | bundled `{{DB}}` container | hosted ({{DB_HOSTING}}) | hosted ({{DB_HOSTING}}, dedicated cluster recommended) |
 | Logging stack | not run | not run | run (`prod/docker-compose.logging.yml`) |
-| Auto-deploy | n/a | GHA on `dev` push | GHA on `main` push (when prod_ready) |
+| Auto-deploy | n/a | GHA on `dev` push | GHA on `v*` tag push (when prod_ready). `main` push only publishes `:latest` — no deploy. |
 
 ## Routing (shared across all envs)
 

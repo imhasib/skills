@@ -8,7 +8,7 @@ on:
         required: true
         default: dev
   push:
-    branches: [dev{{#PROD_READY}}, main{{/PROD_READY}}]
+    branches: [dev, main]
 {{#PROD_READY}}    tags: ["v*"]
 {{/PROD_READY}}
 
@@ -74,7 +74,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   trigger-deploy:
-    # Auto-deploy to staging on `dev` push.{{#PROD_READY}} Prod deploys gate on tags only.{{/PROD_READY}}
+    # Auto-deploy to staging on `dev` push only. `main` builds publish `:latest` but never deploy.{{#PROD_READY}} Prod deploys gate on tags only.{{/PROD_READY}}
     if: github.ref_name == 'dev'{{#PROD_READY}} || github.ref_type == 'tag'{{/PROD_READY}}
     needs: docker
     runs-on: ubuntu-latest

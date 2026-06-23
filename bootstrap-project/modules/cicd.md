@@ -21,19 +21,21 @@ Lint, typecheck, unit tests, integration tests (backend only — spins up DB + c
 
 Fail-fast across steps. Concurrency group cancels superseded pushes.
 
-### `.github/workflows/build.yml` — `dev` push + manual dispatch
+### `.github/workflows/build.yml` — `dev` / `main` push + manual dispatch
 
 Triggers:
-- `push` to `dev` — auto build + dispatch staging deploy
+- `push` to `dev` — auto build + dispatch staging deploy (image gets `sha-<sha>` and the moving `dev` tag)
+- `push` to `main` — auto build only, **no deploy** (image gets `sha-<sha>` and the moving `latest` tag)
 - `workflow_dispatch` with `ref` — manual rebuild
-- **Tag push (`v*`) and `main` push are NOT triggers at bootstrap** — they get added by `/configure-prod` once prod is wired
+- **Tag push (`v*`) is NOT a trigger at bootstrap** — `/configure-prod` adds it once prod is wired
+- **Feature branches do not trigger build** — only `dev` and `main` push do
 
 Steps:
 1. Checkout `<ref>`
 2. Compute tag: `sha-<short-sha>` (SHA-pinned) plus a moving tag (`dev` for dev, `latest` for main)
 3. Login to the chosen registry (DockerHub / GHCR / GCP AR — per `image_registry`)
 4. `docker build` + `docker push` both tags via `docker/build-push-action`
-5. Auto-dispatch `deploy.yml` with `environment=staging` and the SHA tag
+5. Auto-dispatch `deploy.yml` with `environment=staging` and the SHA tag — gated by `if: github.ref_name == 'dev'` so `main` builds never roll a deploy
 
 ### `.github/workflows/deploy.yml` — manual + chained from build
 

@@ -41,7 +41,7 @@ sudo docker compose -f staging/docker-compose.yml up -d
 |---|---|---|---|
 | URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{STAGING_DOMAIN}}` | TODO |
 | Compose | `dev/docker-compose.yml` | `staging/docker-compose.yml` | `prod/docker-compose.yml` |
-| Auto-deploy | n/a | GHA on `dev` push | GHA on `main` push (when prod_ready) |
+| Auto-deploy | n/a | GHA on `dev` push | GHA on `v*` tag push (when prod_ready). `main` push only publishes `:latest` — no deploy. |
 | Database | bundled container | hosted | hosted (dedicated cluster) |
 
 ## Image tags
