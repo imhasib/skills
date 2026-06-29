@@ -2,6 +2,16 @@
 
 All notable changes to the `bootstrap-project` skill.
 
+## [unreleased] — 2026-06-29
+
+### Fixed (CI — frontend repos no longer stamp a broken DB-backed `integration` job)
+
+- **`templates/.github/workflows/ci.yml.tmpl`**: wrapped the entire `integration` job in a new `{{#INTEGRATION_TESTS}}…{{/INTEGRATION_TESTS}}` section. Previously the job (and its `run: <pm> run test:int` step) rendered **unconditionally** for every code repo — only the `services:`/`env:` entries were gated by `{{#MONGO}}`/`{{#POSTGRES}}`/`{{#REDIS}}`. Because those DB/cache flags are project-wide, frontend repos (`-web`, `-web-admin`) were stamped with a Mongo service container **and** a `test:int` step, but their `package.json` templates define no `test:int` script. Result: a guaranteed red `integration` check on every PR for every frontend the skill scaffolds. The new flag is set **per-repo** — `true` only for backend service repos that own a `test:int` script + datastore (e.g. `-core`), `false` for frontend/mobile repos — so frontends get only `lint-and-typecheck` + `unit`, matching the "integration tests (backend only)" intent `modules/cicd.md` already documented.
+- **`SKILL.md`** (conditional-sections list): documented `{{#INTEGRATION_TESTS}}`, stressing it is set per-repo (not project-wide like the DB flags) and why an ungated job fails frontend CI.
+- **`modules/cicd.md`** (`ci.yml` section): spelled out that the `integration` job renders only for repos with a `test:int` script + datastore, and that frontend/mobile repos stamp the flag `false` and reach the backend over HTTP.
+
+  Why: discovered in a live project (`toeic`) where both frontend repos' `ci.yml` failed every PR on a `npm run test:int` step against a Mongo service that the Next.js apps neither have nor need. Root cause was template-level, not project drift — the shared `ci.yml.tmpl` had no backend-only guard around the integration job, so the defect would recur for every future bootstrap. (The separate `typecheck`-script gap seen in that project was local drift, not a template bug — the web `package.json.tmpl` already defines `typecheck`.)
+
 ## [unreleased] — 2026-06-23
 
 ### Changed (CI — `main` push now always builds + publishes `:latest`, never deploys; `dev` push remains the only auto-deploy trigger at bootstrap)

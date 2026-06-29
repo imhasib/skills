@@ -31,6 +31,7 @@ jobs:
       - run: {{PACKAGE_MANAGER}} ci
       - run: {{PACKAGE_MANAGER}} test
 
+{{#INTEGRATION_TESTS}}
   integration:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
@@ -76,3 +77,4 @@ jobs:
 {{/MONGO}}{{#POSTGRES}}          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_test
 {{/POSTGRES}}{{#REDIS}}          REDIS_URL: redis://localhost:6379
 {{/REDIS}}          NODE_ENV: test
+{{/INTEGRATION_TESTS}}

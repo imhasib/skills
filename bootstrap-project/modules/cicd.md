@@ -19,6 +19,8 @@ Each code repo (`{{PROJECT}}-core`, `{{PROJECT}}-web`, `{{PROJECT}}-web-admin`, 
 
 Lint, typecheck, unit tests, integration tests (backend only — spins up DB + cache via GH Actions service containers). Required check on PRs to `dev`.
 
+The `integration` job is wrapped in `{{#INTEGRATION_TESTS}}` and renders **only for backend service repos** that own a `test:int` script + datastore (e.g. `{{PROJECT}}-core`). Frontend/mobile repos (`-web`, `-web-admin`, `-app`) stamp this flag `false` — they have no `test:int` script and reach the backend over HTTP, so they get only the `lint-and-typecheck` and `unit` jobs.
+
 Fail-fast across steps. Concurrency group cancels superseded pushes.
 
 ### `.github/workflows/build.yml` — `dev` / `main` push + manual dispatch

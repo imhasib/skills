@@ -267,6 +267,7 @@ Conditional sections use mustache-style flags:
 - `{{#PROD_READY}}…{{/PROD_READY}}` for content that only renders post-`/configure-prod` (release.yml, prod GHA triggers, prod-domain references in CLAUDE.md)
 - `{{#REGISTRY_DOCKERHUB}}…{{/REGISTRY_DOCKERHUB}}`, `{{#REGISTRY_GHCR}}…`, `{{#REGISTRY_GCP_AR}}…` for registry-specific auth blocks
 - `{{#MONGO}}…{{/MONGO}}`, `{{#POSTGRES}}…`, `{{#MYSQL}}…`, `{{#REDIS}}…` for DB/cache branches in dev compose
+- `{{#INTEGRATION_TESTS}}…{{/INTEGRATION_TESTS}}` — gates the DB-backed `integration` job in `ci.yml`. **Set per-repo, not project-wide**: `true` only when stamping a backend service repo that owns a `test:int` script + datastore (e.g. `{{PROJECT}}-core`); `false` for frontend/mobile repos (`-web`, `-web-admin`, `-app`), which have no `test:int` script and talk to the backend over HTTP. Without this gate, frontend `ci.yml`s render an `integration` job that calls a non-existent `test:int` and fails every PR.
 - `{{#WEB}}…{{/WEB}}`, `{{#WEB_ADMIN}}…`, `{{#MOBILE_FLUTTER}}…{{/MOBILE_FLUTTER}}`, `{{#MOBILE_ANDROID}}…`, `{{#MOBILE_SWIFT}}…`, `{{#E2E_GATE}}…`, `{{#HOTFIX}}…` for opt-in features (`MOBILE_*` flags replace the prior single `{{#MOBILE}}` — distinct because the stamped repo type differs per option)
 
 **Neither staging nor prod is fully configured at bootstrap.** Both `staging/` and `prod/` folders are stamped but `<FILL_IN_*>` placeholders remain. The summary at Phase 6 must remind the user to run `/configure-staging` (once they have a server) and `/configure-prod` (when ready to publish).
