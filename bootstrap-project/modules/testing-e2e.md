@@ -8,7 +8,7 @@ Distilled from `speaking-club/sc-repos/speaking-club-app-tests/`.
 
 - `mobile` — `flutter` | `react-native` (web-only → skip this module)
 - `e2e_gate` — `y`
-- `staging_domain` — for the app's `.env` pointing to the staging API
+- `dev_domain` — for the app's `.env` pointing to the dev API
 - `device_strategy` — `emulator` (default) | `physical` | `cloud` (e.g. BrowserStack)
 
 ## Repo: `{{PROJECT}}-app-tests/`
@@ -31,7 +31,7 @@ Stamped with this layout:
 │   └── waits.js                  # custom waiters (avoid raw sleeps)
 ├── wdio.conf.js                  # WebdriverIO config
 ├── package.json
-├── .env.example                  # APPIUM_HOST, STAGING_API, TEST_USER credentials
+├── .env.example                  # APPIUM_HOST, DEV_API, TEST_USER credentials
 └── README.md
 ```
 
@@ -56,7 +56,7 @@ Stamped with this layout:
 - `services: ['appium']`
 - `framework: 'mocha'`
 - `mochaOpts: { timeout: 90_000 }`
-- `baseUrl: process.env.STAGING_API` — page objects use this for any deep-link or HTTP setup
+- `baseUrl: process.env.DEV_API` — page objects use this for any deep-link or HTTP setup
 
 ## Widget Key requirement (Flutter)
 
@@ -120,7 +120,7 @@ describe('Login', () => {
 ## APK build flow (matches sc pattern)
 
 1. `cd {{PROJECT}}-app`
-2. Ensure `.env` points at `{{STAGING_API}}` (no flavors yet — relies on `envied` to embed env at build time)
+2. Ensure `.env` points at `{{DEV_API}}` (no flavors yet — relies on `envied` to embed env at build time)
 3. `dart run build_runner build --delete-conflicting-outputs` — regenerate env bindings
 4. `flutter build apk --release`
 5. `cp build/app/outputs/flutter-apk/app-release.apk ../{{PROJECT}}-app-tests/apps/{{PROJECT}}.apk`
@@ -156,12 +156,12 @@ E2E failures classify as:
 - `{{PROJECT}}-app-tests/README.md` — how to run, device strategy, APK rebuild
 - `<root>/.claude/agents/test-specialist.md` — owns this repo, knows the page object + key conventions
 - `<root>/.claude/commands/run-e2e.md` — workflow command (already covered by `workflow.md`)
-- Section in `<root>/CLAUDE.md` documenting the E2E gate + URL of the staging API
+- Section in `<root>/CLAUDE.md` documenting the E2E gate + URL of the dev API
 
 ## Hard rules
 
 - **Never use `sleep`/`browser.pause()` as a wait strategy** — use explicit waiters (`waitForDisplayed`, `waitForExist`)
 - **Never target widgets by text** in Flutter specs — text is localized and changes; Keys are stable
-- **Never run E2E in parallel** when staging is single-tenant (per `cicd.md`)
+- **Never run E2E in parallel** when dev is single-tenant (per `cicd.md`)
 - **Never auto-mark a PR ready-for-review** if E2E budget exhausted — PR stays draft; user decides
 - APK in `apps/` must come from a release build of the **same branch** — `/run-e2e` verifies this in the deploy-check phase

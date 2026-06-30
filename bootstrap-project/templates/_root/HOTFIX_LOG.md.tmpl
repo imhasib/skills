@@ -9,7 +9,7 @@ Every invocation of `/hotfix` appends one row here. The hotfix command refuses t
 ## How to read this
 
 - **Branch (from `dev`)**: the working branch the fix was committed on before the push to `dev`. Not a separate branch off `main`.
-- **Verification**: how the fix was checked post-push (smoke test on staging, prod log delta, etc.).
+- **Verification**: how the fix was checked post-push (smoke test on dev, prod log delta, etc.).
 - **Follow-up PR**: link to the PR that ports the same change through the normal `/run-issue` flow back into `dev`, so the audit trail isn't only here.
 
 ## Rules

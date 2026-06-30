@@ -58,17 +58,17 @@ Full contract: `docs/API_CONTRACT.md`. Coding conventions: `docs/CODING_PRACTICE
 
 ## Infrastructure
 
-Three deployment environments live side-by-side in `{{PROJECT}}-deployment/`: `dev/`, `staging/`, `prod/`. See `{{PROJECT}}-deployment/CLAUDE.md` for the full layout.
+Three deployment environments live side-by-side in `{{PROJECT}}-deployment/`: `dev-local/`, `dev/`, `prod/`. See `{{PROJECT}}-deployment/CLAUDE.md` for the full layout.
 
-**At bootstrap time, only `dev/` and `staging/` are fully configured. `prod/` is stamped with `<FILL_IN>` placeholders — run `/configure-prod` from this directory when ready to publish.**
+**At bootstrap time, only `dev-local/` and `dev/` are fully configured. `prod/` is stamped with `<FILL_IN>` placeholders — run `/configure-prod` from this directory when ready to publish.**
 
 - **Cloud provider**: {{CLOUD_PROVIDER}}
 - **Image registry**: {{IMAGE_REGISTRY}} (prefix `{{IMAGE_PREFIX}}/`)
-- **Staging domain**: `{{STAGING_DOMAIN}}` ({{STAGING_POLICY}})
-{{#VPS}}- **Staging VM**: `{{STAGING_SSH_HOST}}`
-- **Staging SSH**: `ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}`
-{{/VPS}}{{#GCP}}- **Staging VM**: `{{STAGING_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
-- **Staging SSH**: `gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
+- **Remote dev domain**: `{{DEV_DOMAIN}}` ({{DEV_POLICY}})
+{{#VPS}}- **Remote dev VM**: `{{DEV_SSH_HOST}}`
+- **Remote dev SSH**: `ssh -i {{DEV_SSH_KEY_PATH}} {{DEV_SSH_USER}}@{{DEV_SSH_HOST}}`
+{{/VPS}}{{#GCP}}- **Remote dev VM**: `{{DEV_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
+- **Remote dev SSH**: `gcloud compute ssh {{DEV_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
 {{/GCP}}- **Production**: TODO — `/configure-prod` populates prod domain, SSH, env, and stamps `prod/REBUILD.md`
 
 ## Branch model

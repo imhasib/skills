@@ -1,5 +1,5 @@
 ---
-description: Run Phases 0–8 of WORKFLOW.md (implement → staging deploy → draft PR). Stops before E2E.
+description: Run Phases 0–8 of WORKFLOW.md (implement → dev deploy → draft PR). Stops before E2E.
 argument-hint: <issue-id-or-url-or-prompt>
 ---
 
@@ -47,7 +47,7 @@ Track progress with `TaskCreate` / `TaskUpdate`. Follow `WORKFLOW.md` exactly. D
 | 3 | Implement | `backend-specialist` first (contracts), then `mobile-specialist` / `web-specialist` / `web-admin-specialist` in parallel via the `Agent` tool. |
 | 4 | Tests | `backend-specialist`: unit + integration. {{#E2E_GATE}}`test-specialist`: Appium specs + page objects for new UI.{{/E2E_GATE}} |
 | 5 | Local gate | Lint → typecheck → unit → integration. Any failure → **Failure Triage** (budget: `{{ITER_BUDGET_RUN_ISSUE}}`). |
-| 6 | Staging deploy | `git push origin <branch>`. Trigger build + deploy workflows. Poll `https://{{STAGING_DOMAIN}}/health` with backoff (max 10 min). Staging is `{{STAGING_POLICY}}` — never overlap with another in-flight `/run-issue` or `/run-e2e`. |
+| 6 | Dev deploy | `git push origin <branch>`. Trigger build + deploy workflows. Poll `https://{{DEV_DOMAIN}}/health` with backoff (max 10 min). Dev is `{{DEV_POLICY}}` — never overlap with another in-flight `/run-issue` or `/run-e2e`. |
 | 8 | **Draft PR** | One **draft** PR per touched repo, cross-linked, base `dev`. Mode A: body includes `Closes <issue-ref>` (`{{TRACKER_CLOSES_KEYWORD}}`). Mode B: embed prompt under "Context". {{#E2E_GATE}}Test plan checklist marks E2E as *pending — run `/run-e2e`*.{{/E2E_GATE}} **Mode A: issue STAYS at In Progress** (move to In Review happens in `/run-e2e` or manually if no E2E gate). |
 
 {{#E2E_GATE}}> **Phase 7 (E2E) is NOT part of `/run-issue`.** It runs in `/run-e2e`. After Phase 8 here, print the draft PR URL(s) and: `Next: /run-e2e <id-or-branch>`.{{/E2E_GATE}}

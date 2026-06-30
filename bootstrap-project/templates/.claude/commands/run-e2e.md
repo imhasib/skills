@@ -5,7 +5,7 @@ argument-hint: <issue-id-or-branch>
 
 Run the **E2E gate** as defined in [`WORKFLOW.md`](../../WORKFLOW.md). That document is the source of truth.
 
-Prerequisite: `/run-issue` has completed and a draft PR exists with the staging deploy live. This command picks up there.
+Prerequisite: `/run-issue` has completed and a draft PR exists with the dev deploy live. This command picks up there.
 
 User input: `$ARGUMENTS`
 
@@ -23,11 +23,11 @@ If no draft PR is found, STOP and tell the user to run `/run-issue` first.
 
 ## Step 2 — Deploy-check
 
-Confirm the staging deployment matches the branch under test:
+Confirm the dev deployment matches the branch under test:
 
-1. Read `https://{{STAGING_DOMAIN}}/health` — should respond `200` with a build SHA.
+1. Read `https://{{DEV_DOMAIN}}/health` — should respond `200` with a build SHA.
 2. The build SHA must match `git rev-parse HEAD` on the branch (in `{{PROJECT}}-core`).
-3. Gap detected? Ask the user: *"Staging SHA doesn't match. Redeploy now, or abort?"*
+3. Gap detected? Ask the user: *"Dev SHA doesn't match. Redeploy now, or abort?"*
 
 ---
 
@@ -55,7 +55,7 @@ Iteration budget: `{{ITER_BUDGET_RUN_E2E}}`.
 On failure → enter triage:
 
 1. **Classify** each failure as in-scope / out-of-scope / blocker (per `WORKFLOW.md` triage subroutine).
-2. **In-scope** → delegate to the right specialist (likely `mobile-specialist` for widget-key changes, `backend-specialist` for API contract). Fix → push → wait for staging redeploy → re-run.
+2. **In-scope** → delegate to the right specialist (likely `mobile-specialist` for widget-key changes, `backend-specialist` for API contract). Fix → push → wait for dev redeploy → re-run.
 3. **Out-of-scope** → file a tracker ticket via `{{TRACKER_FILE_BUG_CMD}}`, do not block PR.
 4. **Blocker** → ⏸ pause for human decision.
 
@@ -85,7 +85,7 @@ On clean pass:
 ## Hard rules
 
 - **Never** auto-mark a PR ready-for-review if the E2E budget is exhausted
-- **Never** overlap with another `/run-issue` or `/run-e2e` when staging is `{{STAGING_POLICY}}` and equals `single-tenant`
+- **Never** overlap with another `/run-issue` or `/run-e2e` when dev is `{{DEV_POLICY}}` and equals `single-tenant`
 - **Never** rebuild the APK from a branch other than the one under test — the deploy-check must verify
 - **Never** dismiss a blocker (security / data / availability) without explicit human ACK
 - **Never** auto-merge the PR — the workflow stops at ready-for-review

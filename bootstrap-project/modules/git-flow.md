@@ -12,7 +12,7 @@ Locks branch model, PR base, hotfix policy, and the main-branch protection hook.
 ```
 main         ← release branch (production; only fast-forwarded from dev via release PRs)
   ↑
-dev          ← integration branch (staging deploys from this)
+dev          ← integration branch (the remote dev env deploys from this)
   ↑
 <feature>    ← per-issue feature branches, base = dev
 ```
@@ -48,7 +48,7 @@ Mirrors the commit subject and appends the issue ID in parens:
 
 ## Branch model: `main ← feature` (alternative)
 
-For solo or simple projects without a staging tier.
+For solo or simple projects without a remote dev tier.
 
 - All feature work branches from `main`, PRs target `main`.
 - No `dev` branch.
@@ -73,7 +73,7 @@ Stamps `<root>/.claude/commands/hotfix.md` with this behaviour:
    - `unit tests` → fail = STOP, report
 5. **Commit** with message: `[hotfix] <subject>` + optional issue ref in body
 6. **Push** — literal `git push origin <branch>` (no PR)
-7. **Trigger staging deploy** — `gh workflow run deploy.yml --ref <branch>` (or chosen CI command). Poll `/health` (max 10 min). If unhealthy → revert via `git revert HEAD && git push`, STOP.
+7. **Trigger dev deploy** — `gh workflow run deploy.yml --ref <branch>` (or chosen CI command). Poll `/health` (max 10 min). If unhealthy → revert via `git revert HEAD && git push`, STOP.
 8. **Tracker update** (if tracker ≠ none) — move ticket → Done (or `Hotfix` column if you configured one)
 9. **Append to `<root>/HOTFIX_LOG.md`**:
    ```
@@ -127,7 +127,7 @@ See `templates/.claude/hooks/block-main-pushes.ps1` for the actual implementatio
 ```md
 ## Git Flow
 
-- Default branch: `dev` (staging integration). `main` is production.
+- Default branch: `dev` (remote-dev integration). `main` is production.
 - All feature work: branch from `dev`, PR back to `dev`.
 - `main` advances via release PR from `dev`, not from features.
 - Hotfix: `/hotfix <subject>` — direct push to `dev` after local gate. Logged in `HOTFIX_LOG.md`.

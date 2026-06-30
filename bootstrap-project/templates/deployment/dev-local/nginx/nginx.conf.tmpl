@@ -71,14 +71,13 @@ http {
     client_body_buffer_size 128k;
 
     # ===========================================
-    # CORS Origin Whitelist — staging
-    # Add staging-facing client origins here.
+    # CORS Origin Whitelist — dev-local
     # ===========================================
     map $http_origin $cors_origin {
         default "";
-        "https://{{STAGING_DOMAIN}}"        $http_origin;
-{{#WEB_ADMIN}}        "https://admin-{{STAGING_DOMAIN}}"  $http_origin;
-{{/WEB_ADMIN}}        "http://localhost:3000"             $http_origin;  # local dev hitting staging API
+        "http://localhost:3000" $http_origin;  # web / web-admin local dev
+        "http://localhost:3001" $http_origin;  # secondary local port
+        "http://localhost:{{DEV_NGINX_PORT}}" $http_origin;  # this nginx
     }
 
     # ===========================================
@@ -94,6 +93,8 @@ http {
         keepalive 32;
     }
 
+    # swagger-ui serves the /api-docs shell; nginx exposes the two spec
+    # endpoints at /api-docs/specs/*.json (see shared/nginx/locations.conf).
     upstream swagger-ui {
         server swagger-ui:8080;
         keepalive 8;
@@ -104,7 +105,7 @@ http {
     # ===========================================
     server {
         listen 80;
-        server_name {{STAGING_DOMAIN}};
+        server_name localhost;
 
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "SAMEORIGIN" always;

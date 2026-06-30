@@ -2,7 +2,7 @@
 
 Grafana + Loki + Promtail logging stack. Optional — only loaded if `monitoring = grafana-loki-promtail`.
 
-**Logging runs prod-only at bootstrap.** The compose file lives at `prod/docker-compose.logging.yml`, alongside the prod app stack. Dev and staging don't run the logging stack (Promtail scraping local Docker logs is rarely worth the resource cost). When prod is configured via `/configure-prod`, this stack starts working.
+**Logging runs prod-only at bootstrap.** The compose file lives at `prod/docker-compose.logging.yml`, alongside the prod app stack. dev-local and the remote dev env don't run the logging stack (Promtail scraping local Docker logs is rarely worth the resource cost). When prod is configured via `/configure-prod`, this stack starts working.
 
 ## Inputs
 
@@ -80,5 +80,5 @@ Promtail's pipeline first attempts JSON parsing; plain-text lines fall back to a
 - Never commit `GRAFANA_ADMIN_PASSWORD` — env var only
 - Never log secrets / JWTs / passwords / full request bodies — sample or redact
 - Retention is capacity-bound — bump `loki_retention_days` only if you've provisioned disk for it
-- Logging stack stays prod-only at bootstrap. If staging logs become useful later, copy the compose file into `staging/` rather than running one cross-env stack
+- Logging stack stays prod-only at bootstrap. If remote-dev logs become useful later, copy the compose file into `dev/` rather than running one cross-env stack
 - The logging stack and app stack MUST share the external `{{PROJECT}}-network` — that's how Promtail discovers app containers

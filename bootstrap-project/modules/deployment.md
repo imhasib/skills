@@ -1,18 +1,18 @@
 # Module: deployment
 
-Defines the tri-env Docker Compose layout (`prod/`, `staging/`, `dev/`), shared nginx pattern, env-file conventions, and per-cloud-provider operations. Always loaded.
+Defines the tri-env Docker Compose layout (`prod/`, `dev/`, `dev-local/`), shared nginx pattern, env-file conventions, and per-cloud-provider operations. Always loaded.
 
-**At bootstrap, only `dev/` and `staging/` are fully wired. `prod/` is stamped with `<FILL_IN>` placeholders — populated later by `/configure-prod`.**
+**At bootstrap, only `dev-local/` and `dev/` are fully wired. `prod/` is stamped with `<FILL_IN>` placeholders — populated later by `/configure-prod`.**
 
 ## Inputs
 
 - `cloud_provider` — `vps` (default) | `gcp`
-- `staging_domain` — public DNS name for staging (e.g. `dev.<project>.karigor.org`)
-- VPS-specific: `staging_ssh_host`, `staging_ssh_user`, `staging_ssh_key_path`
-- GCP-specific: `staging_vm_name`, `gcp_project`, `gcp_zone`
+- `dev_domain` — public DNS name for the remote dev env (e.g. `dev.<project>.karigor.org`)
+- VPS-specific: `dev_ssh_host`, `dev_ssh_user`, `dev_ssh_key_path`
+- GCP-specific: `dev_vm_name`, `gcp_project`, `gcp_zone`
 - `image_registry` — `dockerhub` (default) | `gcp-ar` (if `cloud=gcp`) | `ghcr` | `other`
 - `image_prefix` — actual prefix used in compose, e.g. `imhasib`, `ghcr.io/<owner>`, `europe-west2-docker.pkg.dev/<gcp-project>/<repo>`
-- `db` — `mongodb` | `postgres` | `mysql` (drives the dev bundled DB container choice)
+- `db` — `mongodb` | `postgres` | `mysql` (drives the dev-local bundled DB container choice)
 - `db_hosting` — `atlas` (default for mongo) | `self-hosted` | provider-managed
 - `prod_ready` — `false` at bootstrap (default); `/configure-prod` flips this to `true`
 
@@ -26,12 +26,12 @@ Defines the tri-env Docker Compose layout (`prod/`, `staging/`, `dev/`), shared 
 │   ├── nginx/nginx.conf        # CORS for <FILL_IN_PROD_DOMAIN>
 │   ├── env/                    # gitignored, populated by /configure-prod
 │   └── .env                    # gitignored — host ports + grafana password
-├── staging/                    # LIVE at bootstrap
+├── dev/                        # remote deployment stack — LIVE at bootstrap
 │   ├── docker-compose.yml
-│   ├── nginx/nginx.conf        # CORS for {{STAGING_DOMAIN}}
-│   ├── env/                    # gitignored — staging env files
+│   ├── nginx/nginx.conf        # CORS for {{DEV_DOMAIN}}
+│   ├── env/                    # gitignored — remote dev env files
 │   └── REBUILD.md              # from-zero VM runbook (per-cloud variant)
-├── dev/                        # local dev with bundled DB
+├── dev-local/                  # local dev with bundled DB
 │   ├── docker-compose.yml      # bundled {{DB}} container
 │   ├── nginx/nginx.conf        # CORS for localhost
 │   ├── env/                    # gitignored
@@ -53,7 +53,7 @@ Defines the tri-env Docker Compose layout (`prod/`, `staging/`, `dev/`), shared 
 
 1. CORS allowlist (`map $http_origin $cors_origin { ... }`)
 2. `server_name` directive
-3. Loopback binding (staging+prod bind `127.0.0.1:3030:80`; dev binds `3030:80` direct)
+3. Loopback binding (dev+prod bind `127.0.0.1:3030:80`; dev-local binds `3030:80` direct)
 4. Optional security headers (e.g. HSTS — prod only)
 
 Routes (header-versioned, `/api` base, NOT `/api/v1`):
@@ -64,7 +64,7 @@ Routes (header-versioned, `/api` base, NOT `/api/v1`):
 
 ## External network
 
-`prod/` and `staging/` declare the network as **external**:
+`prod/` and `dev/` declare the network as **external**:
 
 ```yaml
 networks:
@@ -75,7 +75,7 @@ networks:
 
 Created once per VM, out-of-band: `sudo docker network create {{PROJECT}}-network`. This lets the app compose file and the logging compose file share a network without one knowing about the other.
 
-`dev/` uses a self-contained `{{PROJECT}}-dev-network` (managed by compose) so local dev requires zero out-of-band setup.
+`dev-local/` uses a self-contained `{{PROJECT}}-dev-network` (managed by compose) so local dev requires zero out-of-band setup.
 
 ## Image registry pattern
 
@@ -90,7 +90,7 @@ Image refs use `${IMAGE_PREFIX}/<service>:${TAG}` where prefix is whatever the u
 Tags are **passed inline at deploy time** via env vars (`USER_SERVICE_TAG`, `CORE_TAG`, etc.), format `sha-<short-git-sha>`:
 
 ```bash
-sudo -E CORE_TAG=sha-abc1234 docker compose -f staging/docker-compose.yml up -d
+sudo -E CORE_TAG=sha-abc1234 docker compose -f dev/docker-compose.yml up -d
 ```
 
 `sudo -E` is load-bearing — without it, sudo strips the exported env vars and compose falls back to `:latest`. The deploy.yml GHA workflow embeds the right `-E VAR=value` invocation.
@@ -101,15 +101,15 @@ Per-service env files live under `<env>/env/`. Never committed (matched by `**/e
 
 | Env | Files |
 |---|---|
-| dev | `dev/env/{{PROJECT}}-core.env`, `dev/env/user-service.env`. Start from `dev/env.example` (committed combined schema — cp it twice). |
-| staging | `staging/env/{{PROJECT}}-core.env`, `staging/env/user-service.env`. Templates: `staging/env/.env.core.example`, `staging/env/.env.user-service.example`. |
+| dev-local | `dev-local/env/{{PROJECT}}-core.env`, `dev-local/env/user-service.env`. Start from `dev-local/env.example` (committed combined schema — cp it twice). |
+| dev (remote) | `dev/env/{{PROJECT}}-core.env`, `dev/env/user-service.env`. Templates: `dev/env/.env.core.example`, `dev/env/.env.user-service.example`. |
 | prod | `prod/env/{{PROJECT}}-core.env`, `prod/env/user-service.env`, `prod/.env` (ports + grafana). All gitignored. Templates carry `<FILL_IN_*>` placeholders at bootstrap; `/configure-prod` populates them. |
 
 LF line endings are mandatory on env files (CRLF breaks `source` and embeds `\r` into values). `.gitattributes` enforces this for tracked files.
 
 ## Per-env service set
 
-| Service | dev | staging | prod |
+| Service | dev-local | dev (remote) | prod |
 |---|---|---|---|
 | `user-service` | ✓ | ✓ | ✓ |
 | `{{PROJECT}}-core` | ✓ | ✓ | ✓ |
@@ -121,9 +121,9 @@ LF line endings are mandatory on env files (CRLF breaks `source` and embeds `\r`
 | `mongo-express` etc. | opt-in via `--profile tools` | — | — |
 | `grafana` + `loki` + `promtail` | — | — | ✓ (separate compose file) |
 
-## Web services in dev compose
+## Web services in the dev-local compose
 
-When `web ≠ none` and/or `web_admin = y`, `dev/docker-compose.yml` stamps the corresponding Next.js apps as first-class services so a single `docker compose up` brings up the whole stack. Working reference: `E:/org-karigor/toeic/toeic-deployment/dev/docker-compose.yml` (services `toeic-web-app` and `toeic-web-admin`).
+When `web ≠ none` and/or `web_admin = y`, `dev-local/docker-compose.yml` stamps the corresponding Next.js apps as first-class services so a single `docker compose up` brings up the whole stack. Working reference: `E:/org-karigor/toeic/toeic-deployment/dev-local/docker-compose.yml` (services `toeic-web-app` and `toeic-web-admin`).
 
 Stamp the following per opted-in web service:
 
@@ -176,12 +176,12 @@ Notes:
 - **Bind-mount + anonymous volumes**: mounting `../../{{PROJECT}}-web:/app` gives hot-reload from the host source tree, and the two anonymous volumes (`/app/node_modules`, `/app/.next`) keep the container-owned `node_modules` (alpine `libc6-compat`-linked) and the build cache out of the host filesystem. Without these masks, the host's `node_modules` (often a Windows-installed copy) leaks into the container and breaks `next dev`.
 - **`depends_on: user-service.service_healthy`**: the web apps don't strictly need user-service up at boot (the Google exchange only runs on login), but waiting avoids the first sign-in racing user-service's cold start.
 
-## Per-service dev env files
+## Per-service dev-local env files
 
-When `web ≠ none` and/or `web_admin = y`, also stamp under `dev/env/`:
+When `web ≠ none` and/or `web_admin = y`, also stamp under `dev-local/env/`:
 
-- `dev/env/web-app.env` (if `web ≠ none`)
-- `dev/env/web-admin.env` (if `web_admin = y`)
+- `dev-local/env/web-app.env` (if `web ≠ none`)
+- `dev-local/env/web-admin.env` (if `web_admin = y`)
 
 Both files share the same shape (Google client ID + NextAuth secret + backend URL). Stamp them with:
 
@@ -208,17 +208,17 @@ Each app must get its own `AUTH_SECRET` value (cookies don't cross apps anyway, 
 
 The Google OAuth client *secret* (`GOOGLE_CLIENT_SECRET`) is held only by user-service in its own env file — never duplicated into the web apps. The web apps use Google Identity Services in the browser, which doesn't require a secret. The id_token they obtain is forwarded to user-service for validation.
 
-Both files are gitignored (`**/env/*.env`). Only `dev/env.example` is committed; document the shape there too so a new dev can `cp` the relevant pieces into `dev/env/web-app.env` and `dev/env/web-admin.env`.
+Both files are gitignored (`**/env/*.env`). Only `dev-local/env.example` is committed; document the shape there too so a new dev can `cp` the relevant pieces into `dev-local/env/web-app.env` and `dev-local/env/web-admin.env`.
 
-## Per-cloud staging operations
+## Per-cloud remote-dev operations
 
 ### VPS (default)
 
-- SSH: `ssh -i <staging_ssh_key_path> <staging_ssh_user>@<staging_ssh_host>`
+- SSH: `ssh -i <dev_ssh_key_path> <dev_ssh_user>@<dev_ssh_host>`
 - Deploy dir: `/opt/{{PROJECT}}-deployment/` (clone the repo there)
-- Env upload: `scp -i <key> staging/env/*.env <user>@<host>:/opt/{{PROJECT}}-deployment/staging/env/`
-- TLS termination: host-level Caddy proxies `{{STAGING_DOMAIN}}` → `127.0.0.1:3030`
-- GHA secrets: `STAGING_SSH_HOST`, `STAGING_SSH_USER`, `SSH_PRIVATE_KEY`
+- Env upload: `scp -i <key> dev/env/*.env <user>@<host>:/opt/{{PROJECT}}-deployment/dev/env/`
+- TLS termination: host-level Caddy proxies `{{DEV_DOMAIN}}` → `127.0.0.1:3030`
+- GHA secrets: `DEV_SSH_HOST`, `DEV_SSH_USER`, `SSH_PRIVATE_KEY`
 
 ### GCP (opt-in)
 
@@ -226,10 +226,10 @@ Both files are gitignored (`**/env/*.env`). Only `dev/env.example` is committed;
 - Deploy dir: `/opt/{{PROJECT}}-deployment/`
 - Env upload via `gcloud compute scp --tunnel-through-iap`
 - TLS termination: host-level Caddy (same pattern as VPS)
-- GHA secrets: `GCP_SA_KEY` (service account JSON with IAP Tunnel User + image registry pull/push), `STAGING_VM_NAME`
+- GHA secrets: `GCP_SA_KEY` (service account JSON with IAP Tunnel User + image registry pull/push), `DEV_VM_NAME`
 - If using GCP Artifact Registry: SA also needs Artifact Registry Reader/Writer; `docker login` uses `gcloud auth configure-docker`
 
-## staging/REBUILD.md — from-zero runbook
+## dev/REBUILD.md — from-zero runbook
 
 Stamped per cloud. Documents: docker install, network creation, repo clone, env file upload, Caddy config, first `docker compose up`, smoke check.
 
@@ -246,25 +246,25 @@ The `deployment-specialist` agent's prompt instructs Claude **not to populate th
 
 ## What this module renders
 
-- `<project>-deployment/{prod,staging,dev}/docker-compose.yml`
-- `<project>-deployment/{prod,staging,dev}/nginx/nginx.conf`
-- `<project>-deployment/dev/env.example` (committed — combined schema covering `<project>-core`, `user-service`, and any opted-in web apps)
-- `<project>-deployment/dev/env/web-app.env` template (only if `web ≠ none`) and `dev/env/web-admin.env` template (only if `web_admin = y`) — both gitignored at install time; the example shape lives in `dev/env.example`
-- `<project>-deployment/{staging,prod}/env/.env.<service>.example` (committed templates)
+- `<project>-deployment/{prod,dev,dev-local}/docker-compose.yml`
+- `<project>-deployment/{prod,dev,dev-local}/nginx/nginx.conf`
+- `<project>-deployment/dev-local/env.example` (committed — combined schema covering `<project>-core`, `user-service`, and any opted-in web apps)
+- `<project>-deployment/dev-local/env/web-app.env` template (only if `web ≠ none`) and `dev-local/env/web-admin.env` template (only if `web_admin = y`) — both gitignored at install time; the example shape lives in `dev-local/env.example`
+- `<project>-deployment/{dev,prod}/env/.env.<service>.example` (committed templates)
 - `<project>-deployment/prod/.env.example` (committed template)
 - `<project>-deployment/prod/docker-compose.logging.yml`
 - `<project>-deployment/shared/nginx/{locations,cors,proxy-params,proxy-params-minimal}.conf`
-- `<project>-deployment/staging/REBUILD.md` (per-cloud)
+- `<project>-deployment/dev/REBUILD.md` (per-cloud)
 - `<project>-deployment/{grafana,loki,promtail}/*` (logging configs)
 - `<project>-deployment/{.gitignore, .gitattributes, CLAUDE.md, README.md}`
-- Section in `<root>/CLAUDE.md` summarizing the tri-env layout + cloud-specific staging access
+- Section in `<root>/CLAUDE.md` summarizing the tri-env layout + cloud-specific remote-dev access
 
 ## Hard rules
 
 - Never commit `.env` files — only `*.example` / `env.example`
 - Never put routing rules in per-env `nginx.conf` — they go in `shared/nginx/locations.conf` (one place, all envs)
-- Never expose internal service ports to the host — only nginx (loopback on staging/prod, direct on dev)
-- Never run `docker compose down --volumes` against staging or prod without explicit human ACK
+- Never expose internal service ports to the host — only nginx (loopback on dev/prod, direct on dev-local)
+- Never run `docker compose down --volumes` against the remote dev env or prod without explicit human ACK
 - Never populate prod `<FILL_IN_*>` placeholders manually — run `/configure-prod` so the change is consistent across `BOOTSTRAP.json` + workflows + CLAUDE.md
 - Always run `docker compose config -f <env>/docker-compose.yml` before applying changes
-- The external `{{PROJECT}}-network` must exist before `prod/` or `staging/` stacks come up — first-deploy step is `sudo docker network create {{PROJECT}}-network`
+- The external `{{PROJECT}}-network` must exist before `prod/` or `dev/` stacks come up — first-deploy step is `sudo docker network create {{PROJECT}}-network`

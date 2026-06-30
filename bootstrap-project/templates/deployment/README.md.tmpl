@@ -1,13 +1,15 @@
 # {{PROJECT}} Deployment
 
-Docker Compose + nginx for the three {{PROJECT}} environments (dev, staging, prod).
+Docker Compose + nginx for the three {{PROJECT}} environments (dev-local, dev, prod).
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full layout, per-env routing details, and operational reference. This README is day-to-day quick-reference only.
 
-## Quick start (dev — local)
+> **Naming:** `dev-local/` is the zero-setup local stack (bundled DB). `dev/` is the remote deployment environment (hosted DB, on a VM, auto-deployed). `prod/` is deferred at bootstrap.
+
+## Quick start (dev-local — local)
 
 ```bash
-cd dev
+cd dev-local
 cp env.example env/{{PROJECT}}-core.env
 cp env.example env/user-service.env
 # Fill in third-party keys (Google OAuth, Resend, etc.) if testing those features.
@@ -22,13 +24,13 @@ docker compose --profile tools up
 ```
 {{/MONGO}}
 
-## Quick start (staging)
+## Quick start (dev — remote)
 
-Full from-zero runbook: [`staging/REBUILD.md`](./staging/REBUILD.md). On an existing VM:
+Full from-zero runbook: [`dev/REBUILD.md`](./dev/REBUILD.md). On an existing VM:
 
 ```bash
 cd /opt/{{PROJECT}}-deployment
-sudo docker compose -f staging/docker-compose.yml up -d
+sudo docker compose -f dev/docker-compose.yml up -d
 ```
 
 ## Quick start (prod)
@@ -37,10 +39,10 @@ sudo docker compose -f staging/docker-compose.yml up -d
 
 ## Environments
 
-| | dev | staging | prod |
+| | dev-local | dev | prod |
 |---|---|---|---|
-| URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{STAGING_DOMAIN}}` | TODO |
-| Compose | `dev/docker-compose.yml` | `staging/docker-compose.yml` | `prod/docker-compose.yml` |
+| URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{DEV_DOMAIN}}` | TODO |
+| Compose | `dev-local/docker-compose.yml` | `dev/docker-compose.yml` | `prod/docker-compose.yml` |
 | Auto-deploy | n/a | GHA on `dev` push | GHA on `v*` tag push (when prod_ready). `main` push only publishes `:latest` — no deploy. |
 | Database | bundled container | hosted | hosted (dedicated cluster) |
 
@@ -50,7 +52,7 @@ Passed inline at deploy time, not committed:
 
 ```bash
 sudo -E USER_SERVICE_TAG=sha-abc1234 CORE_TAG=sha-def5678 \
-  docker compose -f staging/docker-compose.yml up -d
+  docker compose -f dev/docker-compose.yml up -d
 ```
 
 `-E` is load-bearing — without it sudo strips the exported tags.
@@ -58,12 +60,12 @@ sudo -E USER_SERVICE_TAG=sha-abc1234 CORE_TAG=sha-def5678 \
 ## Stop services
 
 ```bash
-# dev
-cd dev && docker compose down
-cd dev && docker compose down -v          # also drops bundled DB volume
+# dev-local
+cd dev-local && docker compose down
+cd dev-local && docker compose down -v     # also drops bundled DB volume
 
-# staging
-sudo docker compose -f staging/docker-compose.yml down
+# dev (remote)
+sudo docker compose -f dev/docker-compose.yml down
 
 # prod
 sudo docker compose -f prod/docker-compose.yml down

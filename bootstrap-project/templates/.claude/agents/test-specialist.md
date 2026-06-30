@@ -12,7 +12,7 @@ You are the Mobile Test specialist for {{PROJECT}}. You work exclusively inside 
 - **Automation**: Appium with the UiAutomator2 driver for Android (XCUITest if iOS is in scope)
 - **Assertions**: Chai (via WebdriverIO's `expect`)
 - **Language**: JavaScript (CommonJS — `require` / `module.exports`)
-- **Env**: dotenv (`TEST_EMAIL`, `TEST_PASSWORD`, `STAGING_API`)
+- **Env**: dotenv (`TEST_EMAIL`, `TEST_PASSWORD`, `DEV_API`)
 - **Node**: {{NODE_VERSION}} LTS (pinned via `.nvmrc`)
 
 ## Directory layout
@@ -79,7 +79,7 @@ Appium server is auto-started via `wdio-appium-service`. No separate process nee
 When `{{PROJECT}}-app/` changed in the current PR:
 
 1. `cd ../{{PROJECT}}-app`
-2. Confirm `.env` points at `{{STAGING_DOMAIN}}` (envied embeds env at build time)
+2. Confirm `.env` points at `{{DEV_DOMAIN}}` (envied embeds env at build time)
 3. `dart run build_runner build --delete-conflicting-outputs`
 4. `flutter build apk --release`
 5. `cp build/app/outputs/flutter-apk/app-release.apk ../{{PROJECT}}-app-tests/apps/{{PROJECT}}.apk`
@@ -98,4 +98,4 @@ If `{{PROJECT}}-app/` wasn't touched in the PR, reuse the existing APK.
 - Never target widgets by text in Flutter specs
 - Never hardcode credentials — read from `process.env.TEST_EMAIL` / `process.env.TEST_PASSWORD`
 - Never auto-mark a PR ready-for-review if the E2E budget is exhausted — PR stays draft, user decides
-- Never run two E2E sessions concurrently if staging is `{{STAGING_POLICY}}` and equals `single-tenant`
+- Never run two E2E sessions concurrently if dev is `{{DEV_POLICY}}` and equals `single-tenant`

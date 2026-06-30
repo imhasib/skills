@@ -6,9 +6,9 @@ on:
       environment:
         description: "Target environment"
         required: true
-        default: staging
+        default: dev
         type: choice
-        options: [staging{{#PROD_READY}}, production{{/PROD_READY}}]
+        options: [dev{{#PROD_READY}}, production{{/PROD_READY}}]
       image_tag:
         description: "Image tag to deploy (e.g. sha-abc1234)"
         required: true
@@ -34,8 +34,8 @@ jobs:
 
       - name: Deploy via SSH
         env:
-          SSH_HOST: ${{ inputs.environment == 'production' && secrets.PROD_SSH_HOST || secrets.STAGING_SSH_HOST }}
-          SSH_USER: ${{ inputs.environment == 'production' && secrets.PROD_SSH_USER || secrets.STAGING_SSH_USER }}
+          SSH_HOST: ${{ inputs.environment == 'production' && secrets.PROD_SSH_HOST || secrets.DEV_SSH_HOST }}
+          SSH_USER: ${{ inputs.environment == 'production' && secrets.PROD_SSH_USER || secrets.DEV_SSH_USER }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           DEPLOY_ENV: ${{ inputs.environment }}
         run: |
@@ -54,7 +54,7 @@ jobs:
 
       - name: Deploy via gcloud IAP SSH
         env:
-          VM_NAME: ${{ inputs.environment == 'production' && secrets.PROD_VM_NAME || '{{STAGING_VM_NAME}}' }}
+          VM_NAME: ${{ inputs.environment == 'production' && secrets.PROD_VM_NAME || '{{DEV_VM_NAME}}' }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           DEPLOY_ENV: ${{ inputs.environment }}
         run: |
@@ -72,7 +72,7 @@ jobs:
           if [[ "${{ inputs.environment }}" == "production" ]]; then
             DOMAIN="${{ secrets.PROD_DOMAIN }}"
           else
-            DOMAIN="{{STAGING_DOMAIN}}"
+            DOMAIN="{{DEV_DOMAIN}}"
           fi
           for i in $(seq 1 30); do
             if curl -fsS "https://$DOMAIN/health"; then

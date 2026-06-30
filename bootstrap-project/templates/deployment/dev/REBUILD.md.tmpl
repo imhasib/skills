@@ -1,18 +1,18 @@
-# Staging VM Rebuild — {{PROJECT}}
+# Dev (Remote) VM Rebuild — {{PROJECT}}
 
-Full from-zero runbook to bring up the staging environment on a fresh VM.
-Run this once when provisioning a new staging server, and again if the VM is rebuilt.
+Full from-zero runbook to bring up the remote `dev` environment on a fresh VM.
+Run this once when provisioning a new remote-dev server, and again if the VM is rebuilt.
 
 ## Server
 
-{{#VPS}}- Host: `{{STAGING_SSH_HOST}}`
-- User: `{{STAGING_SSH_USER}}`
-- SSH: `ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}`
-{{/VPS}}{{#GCP}}- VM: `{{STAGING_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
-- SSH: `gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
+{{#VPS}}- Host: `{{DEV_SSH_HOST}}`
+- User: `{{DEV_SSH_USER}}`
+- SSH: `ssh -i {{DEV_SSH_KEY_PATH}} {{DEV_SSH_USER}}@{{DEV_SSH_HOST}}`
+{{/VPS}}{{#GCP}}- VM: `{{DEV_VM_NAME}}` (zone `{{GCP_ZONE}}`, project `{{GCP_PROJECT}}`)
+- SSH: `gcloud compute ssh {{DEV_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap`
 {{/GCP}}
 - Deploy dir on host: `/opt/{{PROJECT}}-deployment/` (clone this repo there)
-- External URL: `https://{{STAGING_DOMAIN}}`
+- External URL: `https://{{DEV_DOMAIN}}`
 
 ## Prerequisites on the VM
 
@@ -53,14 +53,14 @@ sudo docker network create {{PROJECT}}-network
 env files are gitignored; you upload them out-of-band.
 
 {{#VPS}}```bash
-scp -i {{STAGING_SSH_KEY_PATH}} \
-  staging/env/{{PROJECT}}-core.env staging/env/user-service.env \
-  {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}:/opt/{{PROJECT}}-deployment/staging/env/
+scp -i {{DEV_SSH_KEY_PATH}} \
+  dev/env/{{PROJECT}}-core.env dev/env/user-service.env \
+  {{DEV_SSH_USER}}@{{DEV_SSH_HOST}}:/opt/{{PROJECT}}-deployment/dev/env/
 ```
 {{/VPS}}{{#GCP}}```powershell
 gcloud compute scp --tunnel-through-iap --zone={{GCP_ZONE}} `
-  .\staging\env\{{PROJECT}}-core.env .\staging\env\user-service.env `
-  {{STAGING_VM_NAME}}:/opt/{{PROJECT}}-deployment/staging/env/
+  .\dev\env\{{PROJECT}}-core.env .\dev\env\user-service.env `
+  {{DEV_VM_NAME}}:/opt/{{PROJECT}}-deployment/dev/env/
 ```
 {{/GCP}}
 
@@ -71,11 +71,11 @@ The internal nginx binds to `127.0.0.1:3030`. Caddy on the host terminates TLS a
 Edit `/etc/caddy/Caddyfile`:
 
 ```
-{{STAGING_DOMAIN}} {
+{{DEV_DOMAIN}} {
     reverse_proxy 127.0.0.1:3030
 }
 {{#WEB_ADMIN}}
-admin-{{STAGING_DOMAIN}} {
+admin-{{DEV_DOMAIN}} {
     reverse_proxy 127.0.0.1:3031
 }
 {{/WEB_ADMIN}}
@@ -89,31 +89,31 @@ sudo systemctl reload caddy
 ### 5. Start the stack
 
 ```bash
-sudo docker compose -f staging/docker-compose.yml up -d
+sudo docker compose -f dev/docker-compose.yml up -d
 ```
 
 Pull latest images and roll forward later with:
 ```bash
-sudo docker compose -f staging/docker-compose.yml pull && \
-sudo docker compose -f staging/docker-compose.yml up -d
+sudo docker compose -f dev/docker-compose.yml pull && \
+sudo docker compose -f dev/docker-compose.yml up -d
 ```
 
 ### 6. Smoke check
 
 ```bash
-curl https://{{STAGING_DOMAIN}}/health   # should return 200 OK
+curl https://{{DEV_DOMAIN}}/health   # should return 200 OK
 ```
 
 ## Auto-deploy via GitHub Actions
 
 After this is up, the workflow at `.github/workflows/deploy.yml` (in `{{PROJECT}}-core`) auto-deploys on every push to `dev`. Set these secrets per code repo:
 
-{{#VPS}}- `SSH_HOST` = `{{STAGING_SSH_HOST}}`
-- `SSH_USER` = `{{STAGING_SSH_USER}}`
-- `SSH_PRIVATE_KEY` = contents of `{{STAGING_SSH_KEY_PATH}}` (private half)
+{{#VPS}}- `SSH_HOST` = `{{DEV_SSH_HOST}}`
+- `SSH_USER` = `{{DEV_SSH_USER}}`
+- `SSH_PRIVATE_KEY` = contents of `{{DEV_SSH_KEY_PATH}}` (private half)
 - `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (if pushing to DockerHub)
 {{/VPS}}{{#GCP}}- `GCP_SA_KEY` = service-account JSON with Compute IAP Tunnel User + Artifact Registry Writer
-- `STAGING_VM_NAME` = `{{STAGING_VM_NAME}}`
+- `DEV_VM_NAME` = `{{DEV_VM_NAME}}`
 - `GCP_ZONE` = `{{GCP_ZONE}}`
 {{/GCP}}
 

@@ -17,7 +17,7 @@ User input: `$ARGUMENTS`
    - Track progress via `TaskCreate` / `TaskUpdate`.
    - Honor every pause it raises (high-risk ACK, decomposition ACK, blocker decisions).
    - On success, capture the resolved **issue ID** (Mode A) or **branch name** (Mode B) and the draft PR URL(s).
-   - On STOP without success (budget exhausted, staging unhealthy, decomposition pause) → **do not** auto-advance. Surface the STOP and exit.
+   - On STOP without success (budget exhausted, dev unhealthy, decomposition pause) → **do not** auto-advance. Surface the STOP and exit.
 
 2. **Invoke `/run-e2e <id-or-branch>`** with the identifier captured above.
    - Track progress (continuing the same task list).
@@ -47,7 +47,7 @@ Re-run /run-e2e <id-or-branch> after fixing.
 ## Hard rules (inherited)
 
 - **Never** merge or push to `main`. PR base is always `dev`.
-- **Never** run `/ship-issue` while another `/run-issue`, `/run-e2e`, or `/ship-issue` is in flight — staging is `{{STAGING_POLICY}}` and they will race.
+- **Never** run `/ship-issue` while another `/run-issue`, `/run-e2e`, or `/ship-issue` is in flight — dev is `{{DEV_POLICY}}` and they will race.
 - **Never** skip the high-risk human ACK gate.
 - **Never** auto-advance to `/run-e2e` if `/run-issue` did not reach a successful draft-PR state.
 - **Never** dismiss a blocker (security / data / availability) without explicit human approval.

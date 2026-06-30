@@ -74,20 +74,20 @@ jobs:
           cache-to: type=gha,mode=max
 
   trigger-deploy:
-    # Auto-deploy to staging on `dev` push only. `main` builds publish `:latest` but never deploy.{{#PROD_READY}} Prod deploys gate on tags only.{{/PROD_READY}}
+    # Auto-deploy to the remote dev env on `dev` push only. `main` builds publish `:latest` but never deploy.{{#PROD_READY}} Prod deploys gate on tags only.{{/PROD_READY}}
     if: github.ref_name == 'dev'{{#PROD_READY}} || github.ref_type == 'tag'{{/PROD_READY}}
     needs: docker
     runs-on: ubuntu-latest
     # Soft-fail: deploy.yml must live on the default branch before GitHub
-    # registers it for workflow_dispatch, and the staging deploy itself no-ops
-    # until /configure-staging populates the <FILL_IN_*> placeholders. Treat
+    # registers it for workflow_dispatch, and the dev deploy itself no-ops
+    # until /configure-dev populates the <FILL_IN_*> placeholders. Treat
     # dispatch errors as informational so build+push outcome owns the status.
     continue-on-error: true
     steps:
       - name: Dispatch deploy
         continue-on-error: true
         run: |
-          ENV="staging"
+          ENV="dev"
 {{#PROD_READY}}          if [[ "${{ github.ref_type }}" == "tag" ]]; then
             ENV="production"
           fi
@@ -96,7 +96,7 @@ jobs:
             --ref ${{ github.ref_name }} \
             --field environment=$ENV \
             --field image_tag=sha-$(git rev-parse --short HEAD); then
-            echo "::warning::Could not dispatch deploy.yml — expected until it's on the default branch and /configure-staging has populated the staging env."
+            echo "::warning::Could not dispatch deploy.yml — expected until it's on the default branch and /configure-dev has populated the dev env."
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

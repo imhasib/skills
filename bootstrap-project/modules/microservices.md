@@ -8,7 +8,7 @@ Defines the service topology, repo split, shared-nginx routing, and shared-servi
 - `web`, `web_admin`, `mobile`, `e2e_gate` — from tech-stack Q&A
 - `use_shared_user_service` — `y` | `n` (default `y`)
 - `db`, `cache` — from tech-stack
-- `staging_domain` — from infra Q&A (prod_domain deferred until `/configure-prod`)
+- `dev_domain` — from infra Q&A (prod_domain deferred until `/configure-prod`)
 - `image_prefix` — registry prefix used in compose files
 
 ## Service topology (rendered into CLAUDE.md)
@@ -17,10 +17,10 @@ Defines the service topology, repo split, shared-nginx routing, and shared-servi
                  Internet
                     │
                     ▼
-              host Caddy (TLS)       <-- staging + prod only
+              host Caddy (TLS)       <-- dev (remote) + prod only
                     │
                     ▼
-                  nginx  (loopback :3030 on staging/prod, :3030 direct on dev)
+                  nginx  (loopback :3030 on dev/prod, :3030 direct on dev-local)
                     │
        ┌────────────┼────────────────────────┐
        │            │                        │
@@ -32,8 +32,8 @@ Defines the service topology, repo split, shared-nginx routing, and shared-servi
        ▼            ▼                        ▼
  user-service   {{PROJECT}}-core         swagger-ui
    (shared)         │
-                    ├── {{DB}} (Atlas / hosted on prod+staging, bundled container on dev)
-                    {{#CACHE}}└── {{CACHE}} (managed on prod+staging, bundled on dev){{/CACHE}}
+                    ├── {{DB}} (Atlas / hosted on prod+dev, bundled container on dev-local)
+                    {{#CACHE}}└── {{CACHE}} (managed on prod+dev, bundled on dev-local){{/CACHE}}
 ```
 
 `{{PROJECT}}-web-admin` and `{{PROJECT}}-web` (if opted in) run as separate containers on their own ports — host Caddy fronts them on dedicated subdomains. They are NOT routed through the internal nginx.
@@ -60,7 +60,7 @@ If `use_shared_user_service = y` (default):
 - **Scope (current):** user mgmt + email + assets/images
 - Stamped into every env's `docker-compose.yml` as a service named `user-service` listening on `:3000` (internal)
 - Stamped into `shared/nginx/locations.conf`: `/api/auth`, `/api/users`, `/api/email`, `/api/assets` → `http://user-service`
-- Stamped into `<env>/env/user-service.env(.example)` with the right keys per env (JWT secrets, OAuth creds, email/asset config — `<FILL_IN_*>` on prod, real on staging/dev)
+- Stamped into `<env>/env/user-service.env(.example)` with the right keys per env (JWT secrets, OAuth creds, email/asset config — `<FILL_IN_*>` on prod, real on dev/dev)
 
 ### Planned future services
 

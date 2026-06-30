@@ -15,7 +15,7 @@
              (API 28+) blocks cleartext to non-localhost by default, which makes
              every Dio request from a physical device silently hang until the
              Dio receiveTimeout fires — no exception, no log, just a dead UI.
-             Once the project moves entirely to HTTPS in staging and prod,
+             Once the project moves entirely to HTTPS in dev and prod,
              narrow this with a network_security_config.xml that allow-lists
              only the dev LAN. -->
         <activity

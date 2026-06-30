@@ -3,7 +3,7 @@ description: Production hotfix — local gate → direct push to dev. Never touc
 argument-hint: <one-line-cause> [--repo=<repo-name>]
 ---
 
-Apply an **urgent fix** directly to `dev`. This bypasses the usual PR review path because the issue is too urgent to wait — typically a production-impacting incident, but also covers staging blockers if those are gating shipped work. Use sparingly — anything that can go through `/run-issue` should.
+Apply an **urgent fix** directly to `dev`. This bypasses the usual PR review path because the issue is too urgent to wait — typically a production-impacting incident, but also covers dev blockers if those are gating shipped work. Use sparingly — anything that can go through `/run-issue` should.
 
 User input: `$ARGUMENTS`
 
@@ -97,7 +97,7 @@ Append a row to `HOTFIX_LOG.md`:
    Branch (local): <hotfix-branch>
 
 Next:
-  1. Verify on staging (and on production, if launched) within 24h and update
+  1. Verify on dev (and on production, if launched) within 24h and update
      HOTFIX_LOG.md "Verification"
   2. Open a normal PR for the same change (back-filled review) — note in "Follow-up PR"
 ```

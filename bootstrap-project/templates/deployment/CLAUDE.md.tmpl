@@ -1,8 +1,10 @@
 # {{PROJECT}}-deployment — Infrastructure
 
-Docker Compose + nginx for {{PROJECT}}. Three environments live side-by-side: `prod/`, `staging/`, `dev/`, with shared nginx snippets under `shared/nginx/`.
+Docker Compose + nginx for {{PROJECT}}. Three environments live side-by-side: `prod/`, `dev/`, `dev-local/`, with shared nginx snippets under `shared/nginx/`.
 
-At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `prod/` folder is stamped with `<FILL_IN>` placeholders — populate them by running `/configure-prod` from the workspace root when you're ready to publish.
+> **Naming:** `dev-local/` is the zero-setup local stack (bundled DB, localhost). `dev/` is the remote deployment environment (hosted DB, on a VM, GHA auto-deploy on `dev`-branch push). `prod/` is deferred at bootstrap.
+
+At bootstrap time, **only `dev/` and `dev-local/` are fully configured**. The `prod/` folder is stamped with `<FILL_IN>` placeholders — populate them by running `/configure-prod` from the workspace root when you're ready to publish.
 
 ## Layout
 
@@ -14,15 +16,15 @@ At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `pro
 │   ├── nginx/                  # prod CORS allowlist (<FILL_IN_PROD_DOMAIN>)
 │   ├── env/                    # prod env files (gitignored, populated by /configure-prod)
 │   └── .env                    # ports + grafana config (gitignored)
-├── staging/                    # staging stack — live at bootstrap
+├── dev/                        # remote deployment stack — live at bootstrap
 │   ├── docker-compose.yml
-│   ├── nginx/                  # CORS for {{STAGING_DOMAIN}}
-│   ├── env/                    # staging env files (gitignored)
+│   ├── nginx/                  # CORS for {{DEV_DOMAIN}}
+│   ├── env/                    # remote dev env files (gitignored)
 │   └── REBUILD.md              # from-zero VM runbook
-├── dev/                        # local dev with bundled DB
+├── dev-local/                  # local dev with bundled DB
 │   ├── docker-compose.yml
 │   ├── nginx/                  # CORS for localhost
-│   ├── env/                    # dev env files (gitignored)
+│   ├── env/                    # local env files (gitignored)
 │   └── env.example             # committed schema — cp to env/{{PROJECT}}-core.env, env/user-service.env
 ├── shared/
 │   └── nginx/                  # mounted by every env's compose
@@ -37,10 +39,10 @@ At bootstrap time, **only `staging/` and `dev/` are fully configured**. The `pro
 
 ## Environments at a glance
 
-| | dev | staging | prod |
+| | dev-local | dev (remote) | prod |
 |---|---|---|---|
-| Host | local | {{#VPS}}`{{STAGING_SSH_HOST}}`{{/VPS}}{{#GCP}}`{{STAGING_VM_NAME}}` ({{GCP_ZONE}}){{/GCP}} | TODO (`/configure-prod`) |
-| External URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{STAGING_DOMAIN}}` | TODO |
+| Host | local | {{#VPS}}`{{DEV_SSH_HOST}}`{{/VPS}}{{#GCP}}`{{DEV_VM_NAME}}` ({{GCP_ZONE}}){{/GCP}} | TODO (`/configure-prod`) |
+| External URL | `http://localhost:{{DEV_NGINX_PORT}}` | `https://{{DEV_DOMAIN}}` | TODO |
 | Ingress | nginx ({{DEV_NGINX_PORT}}) → app | host Caddy → nginx (loopback 3030) → app | host Caddy → nginx → app |
 | Database | bundled `{{DB}}` container | hosted ({{DB_HOSTING}}) | hosted ({{DB_HOSTING}}, dedicated cluster recommended) |
 | Logging stack | not run | not run | run (`prod/docker-compose.logging.yml`) |
@@ -66,13 +68,13 @@ Images are pulled from **{{IMAGE_REGISTRY}}** with prefix `{{IMAGE_PREFIX}}/`. T
 
 ## External network
 
-`prod/` and `staging/` use the external bridge network `{{PROJECT}}-network` so the app stack and logging stack can co-exist from separate compose files. Create once per VM:
+`prod/` and `dev/` use the external bridge network `{{PROJECT}}-network` so the app stack and logging stack can co-exist from separate compose files. Create once per VM:
 
 ```bash
 sudo docker network create {{PROJECT}}-network
 ```
 
-`dev/` uses a self-contained `{{PROJECT}}-dev-network` — `docker compose up` works zero-setup.
+`dev-local/` uses a self-contained `{{PROJECT}}-dev-network` — `docker compose up` works zero-setup.
 
 ## Env files
 
@@ -80,8 +82,8 @@ Stored per-env, **never committed** (matched by `**/env/*.env` in `.gitignore`).
 
 | Env | Files |
 |---|---|
-| dev | `dev/env/{{PROJECT}}-core.env`, `dev/env/user-service.env` — `cp dev/env.example` to start |
-| staging | `staging/env/{{PROJECT}}-core.env`, `staging/env/user-service.env` |
+| dev-local | `dev-local/env/{{PROJECT}}-core.env`, `dev-local/env/user-service.env` — `cp dev-local/env.example` to start |
+| dev (remote) | `dev/env/{{PROJECT}}-core.env`, `dev/env/user-service.env` |
 | prod | `prod/env/{{PROJECT}}-core.env`, `prod/env/user-service.env`, `prod/.env` (ports + grafana) |
 
 LF line endings are mandatory on env files — `.gitattributes` enforces this.
@@ -89,13 +91,13 @@ LF line endings are mandatory on env files — `.gitattributes` enforces this.
 ## Common commands
 
 ```bash
-# dev — local, zero setup
-cd dev && docker compose up
-cd dev && docker compose --profile tools up   # + mongo-express on :8081 (if db=mongo)
+# dev-local — local, zero setup
+cd dev-local && docker compose up
+cd dev-local && docker compose --profile tools up   # + mongo-express on :8081 (if db=mongo)
 
-# staging — on the staging VM
-sudo docker compose -f staging/docker-compose.yml up -d
-sudo docker compose -f staging/docker-compose.yml logs -f
+# dev — on the remote dev VM
+sudo docker compose -f dev/docker-compose.yml up -d
+sudo docker compose -f dev/docker-compose.yml logs -f
 
 # prod — DEFERRED at bootstrap; populate prod/ first via /configure-prod
 sudo docker compose -f prod/docker-compose.yml up -d
@@ -103,31 +105,31 @@ sudo docker compose -f prod/docker-compose.yml \
                     -f prod/docker-compose.logging.yml up -d
 ```
 
-{{#VPS}}## Upload env files to staging VM
+{{#VPS}}## Upload env files to the remote dev VM
 
 ```bash
-scp -i {{STAGING_SSH_KEY_PATH}} \
-  staging/env/{{PROJECT}}-core.env staging/env/user-service.env \
-  {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}}:/opt/{{PROJECT}}-deployment/staging/env/
+scp -i {{DEV_SSH_KEY_PATH}} \
+  dev/env/{{PROJECT}}-core.env dev/env/user-service.env \
+  {{DEV_SSH_USER}}@{{DEV_SSH_HOST}}:/opt/{{PROJECT}}-deployment/dev/env/
 ```
 
 Then restart:
 ```bash
-ssh -i {{STAGING_SSH_KEY_PATH}} {{STAGING_SSH_USER}}@{{STAGING_SSH_HOST}} \
-  "cd /opt/{{PROJECT}}-deployment && sudo docker compose -f staging/docker-compose.yml up -d --force-recreate"
+ssh -i {{DEV_SSH_KEY_PATH}} {{DEV_SSH_USER}}@{{DEV_SSH_HOST}} \
+  "cd /opt/{{PROJECT}}-deployment && sudo docker compose -f dev/docker-compose.yml up -d --force-recreate"
 ```
-{{/VPS}}{{#GCP}}## Upload env files to staging VM (GCP IAP)
+{{/VPS}}{{#GCP}}## Upload env files to the remote dev VM (GCP IAP)
 
 ```powershell
 gcloud compute scp --tunnel-through-iap --zone={{GCP_ZONE}} `
-  .\staging\env\{{PROJECT}}-core.env .\staging\env\user-service.env `
-  {{STAGING_VM_NAME}}:/opt/{{PROJECT}}-deployment/staging/env/
+  .\dev\env\{{PROJECT}}-core.env .\dev\env\user-service.env `
+  {{DEV_VM_NAME}}:/opt/{{PROJECT}}-deployment/dev/env/
 ```
 
 Then restart:
 ```bash
-gcloud compute ssh {{STAGING_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap \
-  --command="cd /opt/{{PROJECT}}-deployment && sudo docker compose -f staging/docker-compose.yml up -d --force-recreate"
+gcloud compute ssh {{DEV_VM_NAME}} --zone={{GCP_ZONE}} --tunnel-through-iap \
+  --command="cd /opt/{{PROJECT}}-deployment && sudo docker compose -f dev/docker-compose.yml up -d --force-recreate"
 ```
 {{/GCP}}
 

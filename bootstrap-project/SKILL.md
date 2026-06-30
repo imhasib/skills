@@ -55,7 +55,7 @@ Group questions logically and ask in batches of 3–5 per turn so the user isn't
    - `gcp-ar` — only offered if cloud_provider=gcp. Image prefix example: `europe-west2-docker.pkg.dev/<gcp-project>/<repo>`. Ask for `gcp_ar_location` (e.g. `europe-west2`).
    - `other` — paste a custom prefix; user wires auth manually.
 
-**Staging and production setup are both deferred.** They will be configured later by running `/configure-staging` and `/configure-prod` from the workspace root — typically once you have a server to point them at. At bootstrap, the `staging/` and `prod/` folders are stamped with `<FILL_IN_*>` placeholders. Do **not** ask staging-server or prod questions in this batch (no SSH host, no VM name, no staging domain, no prod domain).
+**Remote dev and production setup are both deferred.** They will be configured later by running `/configure-dev` and `/configure-prod` from the workspace root — typically once you have a server to point them at. At bootstrap, the `dev/` and `prod/` folders are stamped with `<FILL_IN_*>` placeholders. Do **not** ask remote-dev-server or prod questions in this batch (no SSH host, no VM name, no dev domain, no prod domain).
 
 ### Batch B — Tech stack
 
@@ -98,7 +98,7 @@ Group questions logically and ask in batches of 3–5 per turn so the user isn't
     - If n, only `run-issue.md` is stamped
 24. **Hotfix command?** — `y` (default) / `n`
     - Behaviour: direct `git push origin dev` after local gate passes. Logged to `HOTFIX_LOG.md`. Never touches `main`.
-25. **Staging policy** — `single-tenant` (default) / `per-branch-preview`
+25. **Remote dev deploy policy** — `single-tenant` (default) / `per-branch-preview`
 26. **Iteration budgets** — `[default: 5 for /run-issue, 2 for /run-e2e]`
 
 ### Batch F — Quality & ops
@@ -117,10 +117,10 @@ Group questions logically and ask in batches of 3–5 per turn so the user isn't
     - **Commit footer** (recommended, warn-level in commitlint): `Refs <issue-id>` or `Closes <issue-id>`. Not blocking — a hotfix or trivial chore can land without it.
     - If `n`, no commitlint, no hook, no enforced linking — the workflow docs still note issue refs as a soft convention.
 29. **Lint strictness** — `strict` (default) / `normal` / `lenient`
-30. **DB hosting (staging)** — **deferred to `/configure-staging`**. Database name still defaults to `<project>` and is recorded in `BOOTSTRAP.json` now; the hosting choice (`atlas` / `self-hosted` / `managed-other`) and connection string come later, alongside the staging server.
-    - The dev environment always uses a bundled DB container — independent of this answer.
+30. **DB hosting (remote dev)** — **deferred to `/configure-dev`**. Database name still defaults to `<project>` and is recorded in `BOOTSTRAP.json` now; the hosting choice (`atlas` / `self-hosted` / `managed-other`) and connection string come later, alongside the remote dev server.
+    - The dev-local environment always uses a bundled DB container — independent of this answer.
     - Prod DB connection is asked separately by `/configure-prod` later.
-31. **Dev nginx gateway host port** — `[default: 3030]`. The TCP port the dev machine publishes the nginx gateway on; the in-container nginx always listens on `80`. Override when `3030` is already claimed by another project's dev stack on the same machine. Stamped into `dev/docker-compose.yml` (`<port>:80`), the dev `env.example` localhost URLs (`APP_BASE_URL`, `GOOGLE_CALLBACK_URL`), the dev nginx CORS allow-origin (so the browser accepts cross-origin from the same host:port), and the dev quick-start URLs in deployment + core READMEs. Staging and prod nginx loopback bindings are unrelated and remain `3030` (house style — Caddy proxies a known loopback port; prod also overrideable via `NGINX_PORT` env at deploy time).
+31. **dev-local nginx gateway host port** — `[default: 3030]`. The TCP port the local machine publishes the nginx gateway on; the in-container nginx always listens on `80`. Override when `3030` is already claimed by another project's dev-local stack on the same machine. Stamped into `dev-local/docker-compose.yml` (`<port>:80`), the dev-local `env.example` localhost URLs (`APP_BASE_URL`, `GOOGLE_CALLBACK_URL`), the dev-local nginx CORS allow-origin (so the browser accepts cross-origin from the same host:port), and the dev-local quick-start URLs in deployment + core READMEs. The remote dev and prod nginx loopback bindings are unrelated and remain `3030` (house style — Caddy proxies a known loopback port; prod also overrideable via `NGINX_PORT` env at deploy time).
 
 After Batch F, present a **summary table** of all captured answers and ask: *"Stamp the workspace with these settings? `[y]` to proceed, paste edits to revise."* Do not write files until ack.
 
@@ -226,26 +226,26 @@ Render and write files in this order (so later steps can reference earlier ones)
    - `<project>-app-tests/` — Appium skeleton (if E2E=y) — wdio.conf.js, page objects base, helpers, sample spec
 
 4. **Deployment** (`<project>-deployment/`) — **tri-env layout**:
-   - `dev/` — fully wired with bundled DB container: `docker-compose.yml`, `nginx/nginx.conf` (localhost CORS), `env.example` (committed combined schema)
-   - `staging/` — **stamped with `<FILL_IN_*>` placeholders** (`/configure-staging` populates later): `docker-compose.yml` (loopback nginx bind), `nginx/nginx.conf` (staging CORS with `<FILL_IN_STAGING_DOMAIN>`), `env/.env.*.example` templates, `REBUILD.md` (per-cloud-provider from-zero runbook, with placeholder host/key paths)
+   - `dev-local/` — fully wired with bundled DB container: `docker-compose.yml`, `nginx/nginx.conf` (localhost CORS), `env.example` (committed combined schema)
+   - `dev/` — **stamped with `<FILL_IN_*>` placeholders** (`/configure-dev` populates later): `docker-compose.yml` (loopback nginx bind), `nginx/nginx.conf` (remote-dev CORS with `<FILL_IN_DEV_DOMAIN>`), `env/.env.*.example` templates, `REBUILD.md` (per-cloud-provider from-zero runbook, with placeholder host/key paths)
    - `prod/` — **stamped with `<FILL_IN_*>` placeholders** (`/configure-prod` populates later): `docker-compose.yml`, `docker-compose.logging.yml` (if monitoring), `nginx/nginx.conf`, `.env.example`, `env/.env.*.example`
    - `shared/nginx/` — `locations.conf` (single source of truth for routing, header-versioned), `cors.conf`, `proxy-params.conf`, `proxy-params-minimal.conf` — mounted by every env's compose via `../shared/nginx/`
    - `grafana/`, `loki/`, `promtail/` — if `monitoring=grafana-loki-promtail`; referenced by `prod/docker-compose.logging.yml`
    - `.gitignore` (`**/env/*.env`, `prod/.env`), `.gitattributes` (LF on env + conf files)
-   - `CLAUDE.md`, `README.md` — repo-level docs covering the tri-env layout and per-cloud staging access
+   - `CLAUDE.md`, `README.md` — repo-level docs covering the tri-env layout and per-cloud remote-dev access
 
 5. **CI** (`.github/workflows/` per code repo)
-   - `ci.yml`, `build.yml` — per `cicd.md`. `build.yml` pushes to the chosen `IMAGE_REGISTRY` with the chosen `IMAGE_PREFIX`. At bootstrap, push to `dev` builds + deploys to staging (moving tag `dev`); push to `main` builds + publishes the moving tag `latest` but **does not** deploy. Feature branches don't trigger build.
-   - `deploy.yml` is stamped with the SSH/IAP scaffold but its `with:` block contains `<FILL_IN_*>` placeholders (host, user, VM name, etc.). It runs no-op until `/configure-staging` populates it.
+   - `ci.yml`, `build.yml` — per `cicd.md`. `build.yml` pushes to the chosen `IMAGE_REGISTRY` with the chosen `IMAGE_PREFIX`. At bootstrap, push to `dev` builds + deploys to the remote dev env (moving tag `dev`); push to `main` builds + publishes the moving tag `latest` but **does not** deploy. Feature branches don't trigger build.
+   - `deploy.yml` is stamped with the SSH/IAP scaffold but its `with:` block contains `<FILL_IN_*>` placeholders (host, user, VM name, etc.). It runs no-op until `/configure-dev` populates it.
    - Tag triggers + `release.yml` are NOT stamped at bootstrap — `/configure-prod` adds them.
-   - Deploy auth shapes: VPS → `ssh -i` with `SSH_PRIVATE_KEY` secret; GCP → `gcloud --tunnel-through-iap` with `GCP_SA_KEY` (secrets created later when staging is configured).
+   - Deploy auth shapes: VPS → `ssh -i` with `SSH_PRIVATE_KEY` secret; GCP → `gcloud --tunnel-through-iap` with `GCP_SA_KEY` (secrets created later when the remote dev env is configured).
    - `block-main-pushes.ps1` reminder in PR template
 
 Every rendered file must have placeholders substituted:
 - `{{PROJECT}}` → project name
 - `{{PROJECT_DESCRIPTION}}`
 - `{{CLOUD_PROVIDER}}` → `vps` | `gcp`
-- Staging fields are **not** asked at bootstrap. Render the following as the literal token `<FILL_IN_*>` so `/configure-staging` can find-and-replace them later: `{{STAGING_DOMAIN}}` → `<FILL_IN_STAGING_DOMAIN>`, VPS-only `{{STAGING_SSH_HOST/USER/KEY_PATH}}` → `<FILL_IN_STAGING_SSH_*>`, GCP-only `{{STAGING_VM_NAME}}`/`{{GCP_PROJECT}}`/`{{GCP_ZONE}}` → `<FILL_IN_STAGING_VM_*>` / `<FILL_IN_GCP_*>`. `{{GCP_AR_LOCATION}}` is asked at bootstrap only if `image_registry=gcp-ar` (registry config can't be deferred — CI needs to push images on day one).
+- Remote dev fields are **not** asked at bootstrap. Render the following as the literal token `<FILL_IN_*>` so `/configure-dev` can find-and-replace them later: `{{DEV_DOMAIN}}` → `<FILL_IN_DEV_DOMAIN>`, VPS-only `{{DEV_SSH_HOST/USER/KEY_PATH}}` → `<FILL_IN_DEV_SSH_*>`, GCP-only `{{DEV_VM_NAME}}`/`{{GCP_PROJECT}}`/`{{GCP_ZONE}}` → `<FILL_IN_DEV_VM_*>` / `<FILL_IN_GCP_*>`. `{{GCP_AR_LOCATION}}` is asked at bootstrap only if `image_registry=gcp-ar` (registry config can't be deferred — CI needs to push images on day one).
 - `{{IMAGE_REGISTRY}}` (display name) and `{{IMAGE_PREFIX}}` (actual prefix used in compose)
 - `{{API_BASE}}` (default `/api`), `{{API_VERSION_HEADER}}` (default `API-Version`), `{{API_VERSION_DEFAULT}}` (default `v1`)
 - `{{TRACKER}}` and tracker-specific IDs
@@ -256,21 +256,21 @@ Every rendered file must have placeholders substituted:
 - `{{PROJECT_TITLE}}` — title-case form of `{{PROJECT}}` with hyphens replaced by spaces (e.g. `acme-shop` → `Acme Shop`). Used in brand text rendered to the browser — page metadata `title`, landing-page hero, login-page header, dashboard top-nav brand. Distinct from `{{PROJECT_CLASS}}` (Dart PascalCase, no spaces) because the web app surfaces this verbatim to humans.
 - `{{REVERSE_DNS}}` — reverse-DNS org prefix, used as the Android bundle prefix and `flutter create --org` argument (e.g. `org.karigor`). Combined with `{{PROJECT_SNAKE}}` to form the application id `{{REVERSE_DNS}}.{{PROJECT_SNAKE}}`.
 - `{{DB}}`, `{{CACHE}}`, `{{DB_HOSTING}}`
-- `{{DEV_NGINX_PORT}}` — host TCP port the dev nginx gateway publishes to (default `3030`). Recorded in `BOOTSTRAP.json` so `/upgrade-project` can re-stamp consistently.
+- `{{DEV_NGINX_PORT}}` — host TCP port the dev-local nginx gateway publishes to (default `3030`). Recorded in `BOOTSTRAP.json` so `/upgrade-project` can re-stamp consistently.
 - `{{USER_SERVICE_PATH}}` → `E:\workspace-nodejs\user-service`
 - `{{USER_SERVICE_IMAGE}}` → `{{IMAGE_PREFIX}}/user-service`
 - `{{PROD_READY}}` → `false` at bootstrap (always)
 
 Conditional sections use mustache-style flags:
 - `{{#VPS}}…{{/VPS}}`, `{{#GCP}}…{{/GCP}}` for cloud-provider branches
-- `{{#STAGING_READY}}…{{/STAGING_READY}}` for content that only renders post-`/configure-staging` (deploy.yml `with:` values, staging-domain references in CLAUDE.md, REBUILD.md concrete host/key paths)
+- `{{#DEV_READY}}…{{/DEV_READY}}` for content that only renders post-`/configure-dev` (deploy.yml `with:` values, dev-domain references in CLAUDE.md, REBUILD.md concrete host/key paths)
 - `{{#PROD_READY}}…{{/PROD_READY}}` for content that only renders post-`/configure-prod` (release.yml, prod GHA triggers, prod-domain references in CLAUDE.md)
 - `{{#REGISTRY_DOCKERHUB}}…{{/REGISTRY_DOCKERHUB}}`, `{{#REGISTRY_GHCR}}…`, `{{#REGISTRY_GCP_AR}}…` for registry-specific auth blocks
 - `{{#MONGO}}…{{/MONGO}}`, `{{#POSTGRES}}…`, `{{#MYSQL}}…`, `{{#REDIS}}…` for DB/cache branches in dev compose
 - `{{#INTEGRATION_TESTS}}…{{/INTEGRATION_TESTS}}` — gates the DB-backed `integration` job in `ci.yml`. **Set per-repo, not project-wide**: `true` only when stamping a backend service repo that owns a `test:int` script + datastore (e.g. `{{PROJECT}}-core`); `false` for frontend/mobile repos (`-web`, `-web-admin`, `-app`), which have no `test:int` script and talk to the backend over HTTP. Without this gate, frontend `ci.yml`s render an `integration` job that calls a non-existent `test:int` and fails every PR.
 - `{{#WEB}}…{{/WEB}}`, `{{#WEB_ADMIN}}…`, `{{#MOBILE_FLUTTER}}…{{/MOBILE_FLUTTER}}`, `{{#MOBILE_ANDROID}}…`, `{{#MOBILE_SWIFT}}…`, `{{#E2E_GATE}}…`, `{{#HOTFIX}}…` for opt-in features (`MOBILE_*` flags replace the prior single `{{#MOBILE}}` — distinct because the stamped repo type differs per option)
 
-**Neither staging nor prod is fully configured at bootstrap.** Both `staging/` and `prod/` folders are stamped but `<FILL_IN_*>` placeholders remain. The summary at Phase 6 must remind the user to run `/configure-staging` (once they have a server) and `/configure-prod` (when ready to publish).
+**Neither the remote dev env nor prod is fully configured at bootstrap.** Both `dev/` and `prod/` folders are stamped but `<FILL_IN_*>` placeholders remain. The summary at Phase 6 must remind the user to run `/configure-dev` (once they have a server) and `/configure-prod` (when ready to publish).
 
 Do **not** start dev servers, install dependencies, or run the new project's CI. Stamping only.
 
@@ -306,8 +306,8 @@ Repos created:
   - <project>-deployment   (infra, dev branch)
 
 Deployment envs:
-  - dev/      fully wired (bundled <DB> container, zero-setup local stack)
-  - staging/  DEFERRED — stamped with <FILL_IN_*> placeholders
+  - dev-local/      fully wired (bundled <DB> container, zero-setup local stack)
+  - dev/  DEFERRED — stamped with <FILL_IN_*> placeholders
   - prod/     DEFERRED — stamped with <FILL_IN_*> placeholders
 
 .claude/ team:
@@ -325,9 +325,9 @@ Next steps for you:
   4. cd into <project>-core && start the backend dev server
   5. Run /run-issue <first-task> to drive your first feature
 
-When ready for a staging server (typically as soon as you want CI deploys + a shareable URL):
+When ready for a remote dev server (typically as soon as you want CI deploys + a shareable URL):
   - Provision the VM / host first
-  - From the workspace root, run /configure-staging to fill in the staging/
+  - From the workspace root, run /configure-dev to fill in the dev/
     placeholders and wire deploy.yml secrets
 
 When ready to publish to production (typically weeks/months later):
@@ -357,9 +357,9 @@ The completed workspace must satisfy these invariants:
 - **Never** auto-populate tracker IDs without asking — user must paste them or defer
 - **Never** start the dev server or run npm install on the new project — stamping only
 - **Never** invent module content if a module file is missing — surface and continue with what's loaded
-- **Never** ask staging-server or prod questions in Batch A — both are deferred. Staging goes to `/configure-staging`; prod goes to `/configure-prod`. The `staging/` and `prod/` folders are stamped with `<FILL_IN_*>` placeholders.
+- **Never** ask remote-dev-server or prod questions in Batch A — both are deferred. The remote dev env goes to `/configure-dev`; prod goes to `/configure-prod`. The `dev/` and `prod/` folders are stamped with `<FILL_IN_*>` placeholders.
 - **Never** stamp `release.yml` at bootstrap — it lives in the future `/configure-prod` skill
-- **Never** populate staging or prod `<FILL_IN_*>` placeholders by hand if the user asks mid-bootstrap — direct them to `/configure-staging` / `/configure-prod` once bootstrap completes, so server settings get recorded in `BOOTSTRAP.json` and the GHA workflow conditionals update together
+- **Never** populate remote-dev or prod `<FILL_IN_*>` placeholders by hand if the user asks mid-bootstrap — direct them to `/configure-dev` / `/configure-prod` once bootstrap completes, so server settings get recorded in `BOOTSTRAP.json` and the GHA workflow conditionals update together
 
 ---
 
@@ -373,8 +373,8 @@ Modules live at `~/.claude/skills/bootstrap-project/modules/` (read via the junc
 | `api-contract.md` | Base path, header versioning, bare-resource response shape, flat error body, pagination, Swagger |
 | `coding-practices.md` | Naming, error handling, comments, lint config, commit format |
 | `microservices.md` | Repo split, nginx routes, env files, shared user-service wiring |
-| `deployment.md` | docker-compose dev/prod, env file pattern, prod VM SCP flow |
-| `cicd.md` | build → staging → prod workflow YAML |
+| `deployment.md` | docker-compose dev-local/dev/prod, env file pattern, remote-dev + prod VM SCP flow |
+| `cicd.md` | build → dev → prod workflow YAML |
 | `monitoring.md` | Grafana + Loki + Promtail stack |
 | `testing-unit.md` | Jest/Vitest patterns per stack |
 | `testing-integration.md` | Real DB integration tests (no mocks for DB layer) |
