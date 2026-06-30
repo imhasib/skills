@@ -199,9 +199,6 @@ AUTH_GOOGLE_ID=<FILL_IN_GOOGLE_OAUTH_CLIENT_ID>
 # NextAuth session-signing secret. Generate with: openssl rand -base64 32
 AUTH_SECRET=<FILL_IN_AUTH_SECRET>
 
-# Required when running NextAuth behind a proxy in dev.
-AUTH_TRUST_HOST=true
-
 # Backend URL — resolves to the in-cluster nginx (which fronts user-service +
 # {{PROJECT}}-core). Same URL for both web apps.
 {{PROJECT_UPPER}}_API_BASE_URL=http://nginx/api

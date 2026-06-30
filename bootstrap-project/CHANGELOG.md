@@ -2,6 +2,18 @@
 
 All notable changes to the `bootstrap-project` skill.
 
+## [unreleased] — 2026-06-30
+
+### Fixed (web templates — stop stamping the redundant `AUTH_TRUST_HOST` env var)
+
+- **Dropped `AUTH_TRUST_HOST=true` from every place the skill stamps it.** Both `templates/web/src/auth.ts.tmpl` and `templates/web-admin/src/auth.ts.tmpl` already hardcode `trustHost: true` inside the `NextAuth({...})` call (line 96), so the env var set the exact same flag a second time — pure redundancy. It was being stamped into three surfaces:
+  - `templates/web/.env.example.tmpl` — removed the `AUTH_TRUST_HOST=true` line and its preceding `# Required when running NextAuth behind a proxy…` comment.
+  - `templates/web-admin/.env.example.tmpl` — same removal.
+  - `modules/deployment.md` — removed it from the `dev/env/web-*.env` operator-facing env-shape block (the source for each env's generated, gitignored `env/web-app.env` / `env/web-admin.env`).
+  - `SKILL.md` (web env-shape bullet) — dropped `AUTH_TRUST_HOST=true` from the listed env shape and added a `**No AUTH_TRUST_HOST**` note explaining the hardcoded `trustHost: true` makes it redundant, mirroring the existing `**No AUTH_GOOGLE_SECRET**` note.
+
+  Why: discovered in a live project (`toeic`) while auditing the web/web-admin auth env. With `trustHost: true` already hardcoded in `auth.ts`, the env var is dead config in every env file (dev/staging/prod) the skill produces. Removing it at the template level keeps generated `.env.example`/deployment env files honest and prevents the redundancy recurring on every future bootstrap. (A related `AUTH_URL` var seen in that project's env files was **not** from this skill — it was a post-bootstrap hand-edit — so no template change was needed for it.)
+
 ## [unreleased] — 2026-06-29
 
 ### Fixed (CI — frontend repos no longer stamp a broken DB-backed `integration` job)
